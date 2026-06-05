@@ -1,16 +1,22 @@
 /**
- * VERRACT v0.1.1-beta
+ * verract v0.1.2-beta
  * Design Files Management Build
  *
- * Status:
- * - Runtime stabilized
- * - Cache TTL optimized
- * - Trigger cleanup implemented
- * - Selected range boundary enforced
+ * Release Focus:
+ * - Output main-column safety check added
+ * - Output non-blank warning dialog added
+ * - Output column validation added
+ * - Output/source overlap check added
+ * - Output sheet-boundary check added
+ * - Batch size min/max guard added
+ * - Trigger gap min/max guard added
+ * - Existing output skip behavior clarified
+ *
+ * Architecture:
  * - Still monolithic (pre-modularization phase)
  */
  
- var ENGINE_STATE_KEY = 'IS_ENGINE_RUNNING';
+var ENGINE_STATE_KEY = 'IS_ENGINE_RUNNING';
 var INPUT_WIDTH = 4;
 var OUTPUT_WIDTH = 5;
 var METADATA_KEYS = [
@@ -24,6 +30,12 @@ var METADATA_KEYS = [
   'AUTO_LAST_SUCCESS_TS',
   'AUTO_ENGINE_STARTED_AT'
 ];
+var DEFAULT_BATCH_SIZE = 20;
+var MIN_BATCH_SIZE = 1;
+var MAX_BATCH_SIZE = 500;
+var DEFAULT_TRIGGER_GAP_MINUTES = 5;
+var MIN_TRIGGER_GAP_MINUTES = 5;
+var MAX_TRIGGER_GAP_MINUTES = 60;
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -114,9 +126,53 @@ function CREATE_TIME_TRIGGER_MULTI() {
       ui.ButtonSet.OK_CANCEL
     );
     if (targetColumnPrompt.getSelectedButton() !== ui.Button.OK) return;
-    var targetColumn = convertLetterToColumn(
-      targetColumnPrompt.getResponseText().trim().toUpperCase()
+    var targetColumnText = targetColumnPrompt
+      .getResponseText()
+      .trim()
+      .toUpperCase();
+    if (!isValidColumnLetter_(targetColumnText)) {
+      ui.alert(
+        'Invalid Output Column',
+        'Masukkan huruf kolom saja.\n\nContoh valid: E, AA, AB\nContoh tidak valid: 1, A1, @@, kosong',
+        ui.ButtonSet.OK
+      );
+      return;
+    }
+    var targetColumn = convertLetterToColumn(targetColumnText);
+    var withinBoundary = confirmOutputWithinSheetBoundary_(
+      sheet,
+      targetColumn,
+      OUTPUT_WIDTH
     );
+    if (!withinBoundary) {
+      ss.toast(
+        'Proses dibatalkan: output melebihi batas sheet.',
+        'CANCELLED',
+        5
+      );
+    return;
+    }
+    var sourceColumn = range.getColumn();
+    var noOverlap = confirmOutputDoesNotOverlapSource_(
+      sourceColumn,
+      INPUT_WIDTH,
+      targetColumn,
+      OUTPUT_WIDTH
+    );
+    if (!noOverlap) {
+      ss.toast('Proses dibatalkan: output bertabrakan dengan source.', 'CANCELLED', 5);
+      return;
+    }
+    var canContinue = confirmNonBlankMainOutput_(
+      sheet,
+      range.getRow(),
+      targetColumn,
+      range.getNumRows()
+    );
+    if (!canContinue) {
+      ss.toast('Proses dibatalkan oleh user.', 'CANCELLED', 5);
+      return;
+    }
     var batchPrompt = ui.prompt(
       'Batch Size',
       'Masukkan jumlah row per batch:',
@@ -124,8 +180,19 @@ function CREATE_TIME_TRIGGER_MULTI() {
     );
     if (batchPrompt.getSelectedButton() !== ui.Button.OK) return;
     var batchSize = parseInt(batchPrompt.getResponseText(), 10);
-    if (isNaN(batchSize) || batchSize < 1) {
-      batchSize = 20;
+    if (isNaN(batchSize) || batchSize < MIN_BATCH_SIZE) {
+      batchSize = DEFAULT_BATCH_SIZE;
+    }
+    if (batchSize > MAX_BATCH_SIZE) {
+      ui.alert(
+        '⚠️ Batch Size Too Large',
+        'Batch size maksimal adalah ' +
+          MAX_BATCH_SIZE +
+          ' rows.\n' +
+          'Masukkan angka yang lebih kecil, atau ubah MAX_BATCH_SIZE di config jika sedang melakukan stress test.',
+        ui.ButtonSet.OK
+      );
+      return;
     }
    var gapPrompt = ui.prompt(
       'Interval Menit',
@@ -134,39 +201,48 @@ function CREATE_TIME_TRIGGER_MULTI() {
     );
     if (gapPrompt.getSelectedButton() !== ui.Button.OK) return;
     var gap = parseInt(gapPrompt.getResponseText(), 10);
-    if (isNaN(gap) || gap < 5) {
-      gap = 5;
+    if (isNaN(gap) || gap < MIN_TRIGGER_GAP_MINUTES) {
+      gap = DEFAULT_TRIGGER_GAP_MINUTES;
+    }
+    if (gap > MAX_TRIGGER_GAP_MINUTES) {
+      ui.alert(
+        '⚠️ Interval Too Large',
+        'Interval maksimal adalah ' +
+          MAX_TRIGGER_GAP_MINUTES +
+          ' menit.\n\n' +
+          'Masukkan interval yang lebih kecil agar automation tetap mudah dipantau.',
+        ui.ButtonSet.OK
+      );
+      return;
     }
     deleteExistingTriggers_();
     props.deleteProperty('AUTO_LAST_ERROR');
     props.deleteProperty('AUTO_BACKOFF_UNTIL');
     try {
       var timestampNow = Date.now().toString();
-	  var startRow = range.getRow();
-	  var endRow = startRow + range.getNumRows() - 1;
-	  var sourceColumn = range.getColumn();
-	  var spreadsheetId = ss.getId();
-	  var sheetName = sheet.getName();
-	  var stateMap = {
-	    IS_ENGINE_RUNNING: 'TRUE',
-		AUTO_CURRENT_ROW: startRow.toString(),
-		AUTO_END_ROW: endRow.toString(),
-		AUTO_SOURCE_COL: sourceColumn.toString(),
-		AUTO_TARGET_COL: targetColumn.toString(),
-		AUTO_SPREADSHEET_ID: spreadsheetId,
-		AUTO_SHEET_NAME: sheetName,
-		DYNAMIC_BATCH_SIZE: batchSize.toString(),
-		AUTO_ENGINE_STARTED_AT: timestampNow,
-		AUTO_LAST_SUCCESS_TS: timestampNow
-	  };
+      var startRow = range.getRow();
+      var endRow = startRow + range.getNumRows() - 1;
+      var spreadsheetId = ss.getId();
+      var sheetName = sheet.getName();
+      var stateMap = {
+        IS_ENGINE_RUNNING: 'TRUE',
+        AUTO_CURRENT_ROW: startRow.toString(),
+        AUTO_END_ROW: endRow.toString(),
+        AUTO_SOURCE_COL: sourceColumn.toString(),
+        AUTO_TARGET_COL: targetColumn.toString(),
+        AUTO_SPREADSHEET_ID: spreadsheetId,
+        AUTO_SHEET_NAME: sheetName,
+        DYNAMIC_BATCH_SIZE: batchSize.toString(),
+        AUTO_ENGINE_STARTED_AT: timestampNow,
+        AUTO_LAST_SUCCESS_TS: timestampNow
+      };
       Object.keys(stateMap).forEach(function(key) {
         props.setProperty(key, stateMap[key]);
       });
-
-} catch (stateErr) {
-  Logger.log('STATE WRITE ERROR: ' + stateErr.toString());
-  throw stateErr;
-}
+    } catch (stateErr) {
+      Logger.log('STATE WRITE ERROR: ' + stateErr.toString());
+      throw stateErr;
+    }
     ScriptApp.newTrigger('TRIGGER_BATCH_AUDIT_MULTI')
       .timeBased()
       .everyMinutes(gap)
@@ -188,13 +264,6 @@ function CREATE_TIME_TRIGGER_MULTI() {
 function TRIGGER_BATCH_AUDIT_MULTI() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(500)) return;
-													  
-					   
-																				  
-						   
-					   
-		   
-   
   try {
     var props = PropertiesService.getScriptProperties();
     var now = Date.now();
@@ -217,8 +286,8 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
     if (isNaN(currentRow) || isNaN(endRow) || isNaN(sourceColumn) || isNaN(targetColumn)) {
       throw new Error('Invalid engine state: row/column metadata is corrupted.');
     }
-    if (isNaN(batchSize) || batchSize < 1) {
-      batchSize = 20;
+    if (isNaN(batchSize) || batchSize < MIN_BATCH_SIZE) {
+      batchSize = DEFAULT_BATCH_SIZE;
     }
     if (currentRow > endRow) {
       CLEAR_TRIGGER_AND_STATE();
@@ -456,6 +525,33 @@ function MANUAL_CLEAR_TRIGGER_AND_STATE() {
   );
 }
 
+function confirmNonBlankMainOutput_(sheet, startRow, targetColumn, numRows) {
+  var values = sheet
+    .getRange(startRow, targetColumn, numRows, 1)
+    .getValues();
+  var nonBlankCount = 0;
+  for (var i = 0; i < values.length; i++) {
+    if (values[i][0] !== '') {
+      nonBlankCount++;
+    }
+  }
+  if (nonBlankCount === 0) {
+    return true;
+  }
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.alert(
+    '⚠️ Output Already Exists',
+    'Ditemukan ' +
+      nonBlankCount +
+      ' row pada kolom output utama yang sudah berisi data.\n' +
+      'Row tersebut akan dilewati (skip) oleh sistem.\n\n' +
+      'Klik OK untuk lanjut.\n' +
+      'Klik Cancel untuk membatalkan proses.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  return response === ui.Button.OK;
+}
+
 function generateCacheKey_(value) {
   var rawDigest = Utilities.computeDigest(
     Utilities.DigestAlgorithm.MD5,
@@ -493,4 +589,50 @@ function convertLetterToColumn(letter) {
     column = column * 26 + letter.charCodeAt(i) - 64;
   }
   return column;
+}
+
+function isValidColumnLetter_(value) {
+  return /^[A-Z]+$/.test(value);
+}
+
+function confirmOutputDoesNotOverlapSource_(sourceColumn, inputWidth, targetColumn, outputWidth) {
+  var sourceStart = sourceColumn;
+  var sourceEnd = sourceColumn + inputWidth - 1;
+
+  var outputStart = targetColumn;
+  var outputEnd = targetColumn + outputWidth - 1;
+
+  var isOverlapping = outputStart <= sourceEnd && outputEnd >= sourceStart;
+
+  if (!isOverlapping) {
+    return true;
+  }
+  SpreadsheetApp.getUi().alert(
+    '⚠️ Output Overlaps Source',
+    'Kolom output bertabrakan dengan kolom input.\n' +
+      'Source range: kolom ' + sourceStart + ' sampai ' + sourceEnd + '\n' +
+      'Output range: kolom ' + outputStart + ' sampai ' + outputEnd + '\n\n' +
+      'Pilih kolom output lain agar data input tidak tertimpa.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+  return false;
+}
+
+function confirmOutputWithinSheetBoundary_(sheet, targetColumn, outputWidth) {
+  var maxColumns = sheet.getMaxColumns();
+  var outputEndColumn = targetColumn + outputWidth - 1;
+  if (outputEndColumn <= maxColumns) {
+    return true;
+  }
+  SpreadsheetApp.getUi().alert(
+    '⚠️ Output Exceeds Sheet Boundary',
+    'Output membutuhkan kolom sampai ' +
+      outputEndColumn +
+      ', sedangkan sheet hanya memiliki ' +
+      maxColumns +
+      ' kolom.\n\n' +
+      'Tambahkan kolom terlebih dahulu atau pilih kolom output yang lebih awal.',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
+  return false;
 }
