@@ -33,3 +33,29 @@
 - No fatal trigger failures observed.
 - No timeout cascade detected.
 - No trigger overlap detected during production execution.
+
+---
+
+## v0.1.2-beta — Input & Output Safety Layer
+
+### Added
+
+- Added output column format validation (A, AA, AB, etc.).
+- Added output sheet-boundary validation.
+- Added output/source overlap detection.
+- Added output main-column safety inspection.
+- Added non-blank output warning dialog with user confirmation.
+- Added batch size minimum and maximum guard.
+- Added trigger interval minimum and maximum guard.
+
+### Changed
+
+- Clarified existing output skip behavior.
+- Standardized batch-size fallback handling using configuration constants.
+- Standardized trigger-gap fallback handling using configuration constants.
+
+### Notes
+
+- Engine remains monolithic and intentionally unchanged architecturally.
+- This release focuses on preventing accidental data overwrite and invalid runtime configuration.
+- Modularization phase remains scheduled for v0.2.0.
