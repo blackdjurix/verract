@@ -59,3 +59,39 @@
 - Engine remains monolithic and intentionally unchanged architecturally.
 - This release focuses on preventing accidental data overwrite and invalid runtime configuration.
 - Modularization phase remains scheduled for v0.2.0.
+
+---
+
+## v0.2.0-beta — Verify Engine Modularization
+
+### Architecture
+
+- Refactored the Verify engine from a monolithic single-file implementation into a modular architecture.
+- Archived the final monolithic build as:
+  - `src/legacy/verract_Initial_v0.1.2.gs`
+- Introduced dedicated module structure:
+  - `00_Config.gs`
+  - `01_Menu.gs`
+  - `02_Diagnostics.gs`
+  - `03_Engine.gs`
+  - `04_Resolver.gs`
+  - `05_State.gs`
+  - `06_Validation.gs`
+  - `07_Utils.gs`
+- Separated responsibilities between configuration, UI, diagnostics, engine orchestration, resolver logic, runtime state management, validation, and shared utilities.
+- Established the architectural foundation for future modules:
+  - Resolve
+  - Target Validation
+  - Action
+
+### Behavior
+
+- No functional behavior changes from v0.1.2-beta.
+- Existing Verify workflows remain fully compatible.
+- Existing runtime safeguards remain unchanged.
+
+### Notes
+
+- This release focuses exclusively on maintainability, readability, and long-term scalability.
+- Modularization was completed before implementation of the Resolve phase.
+- Serves as the architectural baseline for all future verract modules.
