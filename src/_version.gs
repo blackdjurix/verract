@@ -1,20 +1,19 @@
 var VERRACT_VERSION_INFO = {
   name: 'verract',
-  version: '0.2.2-beta',
+  version: '0.3.0-beta',
   build: 'Design Files Management Build',
   author: 'blackdjurix',
-  feature: 'Flexible Verify Input Reference Parser',
-  highlights: [
-    'Supports dynamic path-column selection',
-    'Supports non-contiguous columns and column ranges',
-    'Supports path + file.ext input',
-    'Supports full path\\file.ext input',
-    'Supports optional path + file + ext input',
-    'Verifies filename against multiple candidate paths',
-    'Skips duplicate normalized paths per row',
-    'Stops at the first valid file match',
-    'Adds workload protection for batch execution'
-  ]
+  feature: 'Resolve Foundation',
+highlights: [
+  'Introduces Resolve phase foundation',
+  'Adds Resolve configuration and state management',
+  'Supports Verify error interpretation',
+  'Supports object target extraction',
+  'Introduces Drive index candidate discovery',
+  'Supports Resolve result generation',
+  'Validates candidate lookup workflow',
+  'Prepares Resolve batch processing engine'
+]
 };
 
 function SHOW_VERSION_INFO() {

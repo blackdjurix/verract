@@ -1,6 +1,45 @@
 # Changelog
 
 <details>
+<summary><strong>v0.3.0-beta - Resolve Foundation</strong></summary>
+
+### Added
+
+* Resolve configuration framework
+* Resolve metadata management
+* Resolve state cleanup integration
+* Resolve helper utilities
+* Verify error interpretation
+* Object target extraction from Verify inputs
+* Drive index candidate discovery
+* Resolve result builder
+* Resolve diagnostic test suite
+
+### Changed
+
+* Resolve strategy shifted from recursive folder traversal to Drive index search
+* Candidate discovery now targets actual objects instead of failed path segments
+* Resolve design aligned with large-scale batch processing requirements
+
+### Validated
+
+* Verify error parsing workflow
+* Object target extraction workflow
+* Drive index candidate lookup
+* Single-match candidate resolution
+* Resolve result generation
+* Verify context integration into Resolve notes
+
+### Notes
+
+* Resolve currently provides foundation and candidate discovery components only
+* Resolve batch engine has not been implemented yet
+* Resolve trigger workflow has not been implemented yet
+* Action phase remains out of scope for v0.3.0-beta
+
+</details>
+
+<details>
 <summary>v0.2.2-beta - Flexible Verify Input Reference Parser</summary>
 
 ### Features
