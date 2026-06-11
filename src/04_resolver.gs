@@ -1,3 +1,202 @@
+function buildFileReferenceFromRow_(config) {
+  var rawPathEntries =
+    config.rawPathEntries || [];
+  var fileNameValue =
+    config.fileNameValue || '';
+  var extensionValue =
+    config.extensionValue || '';
+  var explicitFilename =
+    buildFilenameWithOptionalExtension_(
+      fileNameValue,
+      extensionValue
+    );
+  var candidatePaths = [];
+  var inferredFilename = '';
+  var checkedPathCount = 0;
+  for (
+    var i = 0;
+    i < rawPathEntries.length;
+    i++
+  ) {
+    var pathEntry =
+      rawPathEntries[i];
+    var rawPathValue =
+      pathEntry.value;
+    if (!rawPathValue) {
+      continue;
+    }
+    var parsedReference =
+      parsePathReference_(
+        rawPathValue
+      );
+    if (
+      parsedReference.hasFilename
+    ) {
+      if (
+        explicitFilename &&
+        parsedReference.filename !==
+          explicitFilename
+      ) {
+        candidatePaths.push({
+          path:
+            parsedReference.folderPath,
+          column:
+            pathEntry.column,
+          columnLetter:
+            pathEntry.columnLetter
+        });
+        checkedPathCount++;
+        continue;
+      }
+      if (!inferredFilename) {
+        inferredFilename =
+          parsedReference.filename;
+      }
+      candidatePaths.push({
+        path:
+          parsedReference.folderPath,
+        column:
+          pathEntry.column,
+        columnLetter:
+          pathEntry.columnLetter
+      });
+      checkedPathCount++;
+      continue;
+    }
+    candidatePaths.push({
+      path:
+        parsedReference.folderPath,
+      column:
+        pathEntry.column,
+      columnLetter:
+        pathEntry.columnLetter
+    });
+    checkedPathCount++;
+  }
+  var finalFilename =
+    explicitFilename ||
+    inferredFilename;
+  if (!finalFilename) {
+    return {
+      isValid: false,
+      candidatePaths: [],
+      filename: '',
+      checkedPathCount: 0,
+      error: 'Missing filename.'
+    };
+  }
+  if (candidatePaths.length === 0) {
+    return {
+      isValid: false,
+      candidatePaths: [],
+      filename: finalFilename,
+      checkedPathCount: checkedPathCount,
+      error: 'Missing candidate path.'
+    };
+  }
+  return {
+    isValid: true,
+    candidatePaths: candidatePaths,
+    filename: finalFilename,
+    checkedPathCount: checkedPathCount,
+    error: ''
+  };
+}
+
+function buildFilenameWithOptionalExtension_(
+  fileNameValue,
+  extensionValue
+) {
+  var filename = fileNameValue
+    ? fileNameValue.toString().trim()
+    : '';
+  var extension = extensionValue
+    ? extensionValue.toString().trim()
+    : '';
+  if (!filename) {
+    return '';
+  }
+  if (!extension) {
+    return filename;
+  }
+  extension = extension.replace(
+    /^\.+/,
+    ''
+  );
+  if (!extension) {
+    return filename;
+  }
+  if (
+    filename
+      .toLowerCase()
+      .slice(
+        -1 * (extension.length + 1)
+      ) ===
+    '.' + extension.toLowerCase()
+  ) {
+    return filename;
+  }
+  return filename + '.' + extension;
+}
+
+function parsePathReference_(rawPathValue) {
+  var normalizedPath =
+    normalizePathForTraversal_(
+      rawPathValue
+    );
+  if (!normalizedPath) {
+    return {
+      folderPath: '',
+      filename: '',
+      hasFilename: false
+    };
+  }
+  var segments =
+    normalizedPath.split('\\');
+  var lastSegment =
+    segments.length
+      ? segments[segments.length - 1]
+      : '';
+  if (
+    looksLikeFileName_(
+      lastSegment
+    )
+  ) {
+    segments.pop();
+    return {
+      folderPath:
+        segments.join('\\'),
+      filename:
+        lastSegment,
+      hasFilename: true
+    };
+  }
+  return {
+    folderPath:
+      normalizedPath,
+    filename: '',
+    hasFilename: false
+  };
+}
+
+function looksLikeFileName_(value) {
+  if (!value) {
+    return false;
+  }
+  var text =
+    value.toString().trim();
+  if (!text) {
+    return false;
+  }
+  if (
+    text.indexOf('\\') !== -1 ||
+    text.indexOf('/') !== -1
+  ) {
+    return false;
+  }
+  return /\.[^.\s\\\/]+$/.test(text);
+}
+
 function verifyFileAcrossCandidatePaths_(
   rootId,
   candidatePaths,
@@ -6,6 +205,9 @@ function verifyFileAcrossCandidatePaths_(
 ) {
   var normalizedRootId = rootId
     ? rootId.toString().trim()
+    : '';
+  var normalizedFilename = filename
+    ? filename.toString().trim()
     : '';
   if (!normalizedRootId) {
     return buildVerifyFileResult_(
@@ -19,9 +221,6 @@ function verifyFileAcrossCandidatePaths_(
       'Missing RootID.'
     );
   }
-  var normalizedFilename = filename
-    ? filename.toString().trim()
-    : '';
   if (!normalizedFilename) {
     return buildVerifyFileResult_(
       false,
@@ -34,22 +233,13 @@ function verifyFileAcrossCandidatePaths_(
       'Missing filename.'
     );
   }
-  if (!candidatePaths || candidatePaths.length === 0) {
-    return buildVerifyFileResult_(
-      false,
-      '',
-      '',
-      '',
-      '',
-      '',
-      0,
-      'No candidate paths provided.'
+  var uniqueCandidatePaths =
+    deduplicateCandidatePaths_(
+      candidatePaths
     );
-  }
-  var uniquePaths = deduplicateCandidatePaths_(
-    candidatePaths
-  );
-  if (uniquePaths.length === 0) {
+  if (
+    uniqueCandidatePaths.length === 0
+  ) {
     return buildVerifyFileResult_(
       false,
       '',
@@ -58,24 +248,26 @@ function verifyFileAcrossCandidatePaths_(
       '',
       '',
       0,
-      'No valid candidate paths available.'
+      'Missing candidate path.'
     );
   }
   var checkedPathCount = 0;
   var lastError = '';
   for (
     var i = 0;
-    i < uniquePaths.length;
+    i < uniqueCandidatePaths.length;
     i++
   ) {
-    var candidate = uniquePaths[i];
+    var candidatePath =
+      uniqueCandidatePaths[i];
     checkedPathCount++;
-    var result = verifyFileAtCandidatePath_(
-      normalizedRootId,
-      candidate.value,
-      normalizedFilename,
-      scriptCache
-    );
+    var result =
+      verifyFileAtCandidatePath_(
+        normalizedRootId,
+        candidatePath.path,
+        normalizedFilename,
+        scriptCache
+      );
     if (result.exists) {
       return buildVerifyFileResult_(
         true,
@@ -83,16 +275,13 @@ function verifyFileAcrossCandidatePaths_(
         'file',
         result.parentId,
         result.verifiedFilePath,
-        convertColumnToLetter_(
-          candidate.column
-        ),
+        candidatePath.columnLetter,
         checkedPathCount,
         ''
       );
     }
-    if (result.error) {
-      lastError = result.error;
-    }
+    lastError =
+      result.error || lastError;
   }
   return buildVerifyFileResult_(
     false,
@@ -117,49 +306,41 @@ function deduplicateCandidatePaths_(
     i < candidatePaths.length;
     i++
   ) {
-    var candidate = candidatePaths[i];
+    var candidate =
+      candidatePaths[i];
     if (
       !candidate ||
-      candidate.value === '' ||
-      candidate.value === null ||
-      candidate.value === undefined
+      !candidate.path
     ) {
       continue;
     }
-    var originalValue = candidate.value
-      .toString()
-      .trim();
-    if (!originalValue) {
-      continue;
-    }
-    var normalizedKey =
+    var key =
       normalizeCandidatePathKey_(
-        originalValue
+        candidate.path
       );
-    if (
-      !normalizedKey ||
-      seen[normalizedKey]
-    ) {
+    if (!key || seen[key]) {
       continue;
     }
-    seen[normalizedKey] = true;
+    seen[key] = true;
     uniquePaths.push({
+      path: candidate.path,
       column: candidate.column,
-      value: originalValue
+      columnLetter:
+        candidate.columnLetter
     });
   }
   return uniquePaths;
 }
 
-function normalizeCandidatePathKey_(pathValue) {
-  if (!pathValue) {
-    return '';
-  }
+function normalizeCandidatePathKey_(
+  pathValue
+) {
   return normalizePathForTraversal_(
-    pathValue.toString()
+    pathValue
   )
-    .replace(/\\+$/g, '')
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function verifyFileAtCandidatePath_(
@@ -168,77 +349,62 @@ function verifyFileAtCandidatePath_(
   filename,
   scriptCache
 ) {
-  var cleanPath =
+  var normalizedPath =
     normalizePathForTraversal_(
       candidatePath
     );
-  if (!cleanPath) {
+  if (!normalizedPath) {
     return {
       exists: false,
       fileId: '',
       parentId: '',
       verifiedFilePath: '',
-      error: 'Empty candidate path.'
+      error: 'Missing path.'
     };
   }
-  try {
-    var parentFolder =
-      resolveFolderFromRootId_(
-        rootId,
-        cleanPath,
-        scriptCache
-      );
-    if (!parentFolder.exists) {
-      return {
-        exists: false,
-        fileId: '',
-        parentId:
-          parentFolder.parentId || '',
-        verifiedFilePath: '',
-        error:
-          parentFolder.error ||
-          'Candidate folder not found.'
-      };
-    }
-    var folder = DriveApp.getFolderById(
-      parentFolder.folderId
+  var folderResult =
+    resolveFolderFromRootId_(
+      rootId,
+      normalizedPath,
+      scriptCache
     );
-    var files = folder.getFilesByName(
-      filename
-    );
-    if (!files.hasNext()) {
-      return {
-        exists: false,
-        fileId: '',
-        parentId: folder.getId(),
-        verifiedFilePath: '',
-        error:
-          'File not found: ' + filename
-      };
-    }
-    var file = files.next();
-    return {
-      exists: true,
-      fileId: file.getId(),
-      parentId: folder.getId(),
-      verifiedFilePath:
-        joinPathAndFilename_(
-          candidatePath,
-          filename
-        ),
-      error: ''
-    };
-  } catch (err) {
+  if (!folderResult.exists) {
     return {
       exists: false,
       fileId: '',
-      parentId: rootId || '',
+      parentId: '',
       verifiedFilePath: '',
-      error:
-        'File verification error: ' +
-        err.toString()
+      error: folderResult.error
     };
   }
+  var files =
+    folderResult.folder
+      .getFilesByName(filename);
+  if (!files.hasNext()) {
+    return {
+      exists: false,
+      fileId: '',
+      parentId:
+        folderResult.folder.getId(),
+      verifiedFilePath: '',
+      error:
+        'File not found: ' +
+        filename
+    };
+  }
+  var file = files.next();
+  return {
+    exists: true,
+    fileId: file.getId(),
+    parentId:
+      folderResult.folder.getId(),
+    verifiedFilePath:
+      joinPathAndFilename_(
+        normalizedPath,
+        filename
+      ),
+    error: ''
+  };
 }
 
 function resolveFolderFromRootId_(
@@ -246,103 +412,134 @@ function resolveFolderFromRootId_(
   relativePath,
   scriptCache
 ) {
-  try {
-    var currentFolder =
-      DriveApp.getFolderById(rootId);
-    var segments = relativePath
-      .split('\\')
-      .filter(String);
-    if (!segments.length) {
+  var normalizedRootId = rootId
+    ? rootId.toString().trim()
+    : '';
+  var normalizedPath =
+    normalizePathForTraversal_(
+      relativePath
+    );
+  if (!normalizedRootId) {
+    return {
+      exists: false,
+      folder: null,
+      error: 'Missing RootID.'
+    };
+  }
+  if (!normalizedPath) {
+    try {
       return {
         exists: true,
-        folderId: currentFolder.getId(),
-        parentId: rootId,
+        folder:
+          DriveApp.getFolderById(
+            normalizedRootId
+          ),
         error: ''
       };
+    } catch (err) {
+      return {
+        exists: false,
+        folder: null,
+        error:
+          'Invalid RootID: ' +
+          normalizedRootId
+      };
     }
-    var parentId = rootId;
-    for (
-      var i = 0;
-      i < segments.length;
-      i++
-    ) {
-      var segment = segments[i];
-      var cacheKey = generateCacheKey_(
-        'folder|' +
-          parentId +
-          '|' +
-          segment
+  }
+  var cacheKey =
+    generateCacheKey_(
+      normalizedRootId +
+        '|' +
+        normalizedPath
+    );
+  var cachedFolderId =
+    scriptCache.get(cacheKey);
+  if (cachedFolderId) {
+    try {
+      return {
+        exists: true,
+        folder:
+          DriveApp.getFolderById(
+            cachedFolderId
+          ),
+        error: ''
+      };
+    } catch (err) {}
+  }
+  var folder;
+  try {
+    folder =
+      DriveApp.getFolderById(
+        normalizedRootId
       );
-      var cachedFolderId =
-        scriptCache.get(cacheKey);
-      if (cachedFolderId) {
-        try {
-          currentFolder =
-            DriveApp.getFolderById(
-              cachedFolderId
-            );
-          parentId = cachedFolderId;
-          continue;
-        } catch (cacheErr) {
-          scriptCache.remove(cacheKey);
-        }
-      }
-      var folders =
-        currentFolder.getFoldersByName(
-          segment
-        );
-      if (!folders.hasNext()) {
-        return {
-          exists: false,
-          folderId: '',
-          parentId:
-            currentFolder.getId(),
-          error:
-            'Missing folder: ' +
-            segment
-        };
-      }
-      currentFolder = folders.next();
-      parentId = currentFolder.getId();
-      try {
-        scriptCache.put(
-          cacheKey,
-          parentId,
-          CACHE_TTL_SECONDS
-        );
-      } catch (cachePutErr) {}
-    }
-    return {
-      exists: true,
-      folderId: currentFolder.getId(),
-      parentId: parentId,
-      error: ''
-    };
   } catch (err) {
     return {
       exists: false,
-      folderId: '',
-      parentId: rootId || '',
+      folder: null,
       error:
-        'Folder resolution error: ' +
-        err.toString()
+        'Invalid RootID: ' +
+        normalizedRootId
     };
   }
+  var segments =
+    normalizedPath
+      .split('\\')
+      .filter(String);
+  for (
+    var i = 0;
+    i < segments.length;
+    i++
+  ) {
+    var segment =
+      segments[i];
+    var childFolders =
+      folder.getFoldersByName(
+        segment
+      );
+    if (!childFolders.hasNext()) {
+      return {
+        exists: false,
+        folder: null,
+        error:
+          'Missing folder: ' +
+          segment
+      };
+    }
+    folder = childFolders.next();
+  }
+  scriptCache.put(
+    cacheKey,
+    folder.getId(),
+    CACHE_TTL_SECONDS
+  );
+  return {
+    exists: true,
+    folder: folder,
+    error: ''
+  };
 }
 
 function joinPathAndFilename_(
   pathValue,
   filename
 ) {
-  var cleanPath = pathValue
-    .toString()
-    .trim()
-    .replace(/\//g, '\\')
-    .replace(/\\+$/g, '');
+  var normalizedPath =
+    normalizePathForTraversal_(
+      pathValue
+    );
+  var normalizedFilename = filename
+    ? filename.toString().trim()
+    : '';
+  if (!normalizedPath) {
+    return normalizedFilename;
+  }
+  if (!normalizedFilename) {
+    return normalizedPath;
+  }
   return (
-    cleanPath +
+    normalizedPath +
     '\\' +
-    filename.toString().trim()
+    normalizedFilename
   );
 }
 
@@ -358,15 +555,15 @@ function buildVerifyFileResult_(
 ) {
   return {
     exists: exists,
-    fileId: fileId,
-    fileType: fileType,
-    parentId: parentId,
+    fileId: fileId || '',
+    fileType: fileType || '',
+    parentId: parentId || '',
     verifiedFilePath:
-      verifiedFilePath,
+      verifiedFilePath || '',
     matchedPathColumn:
-      matchedPathColumn,
+      matchedPathColumn || '',
     checkedPathCount:
-      checkedPathCount,
-    error: error
+      checkedPathCount || 0,
+    error: error || ''
   };
 }

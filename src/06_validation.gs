@@ -46,12 +46,10 @@ function parseColumnSelection_(inputText) {
           error: 'Range kolom tidak valid: ' + token
         };
       }
-      var firstColumn = convertLetterToColumn(
-        startLetter
-      );
-      var secondColumn = convertLetterToColumn(
-        endLetter
-      );
+      var firstColumn =
+        convertLetterToColumn(startLetter);
+      var secondColumn =
+        convertLetterToColumn(endLetter);
       var startColumn = Math.min(
         firstColumn,
         secondColumn
@@ -79,9 +77,8 @@ function parseColumnSelection_(inputText) {
         error: 'Kolom tidak valid: ' + token
       };
     }
-    var columnNumber = convertLetterToColumn(
-      token
-    );
+    var columnNumber =
+      convertLetterToColumn(token);
     if (!seen[columnNumber]) {
       seen[columnNumber] = true;
       columns.push(columnNumber);
@@ -107,9 +104,7 @@ function parseColumnSelection_(inputText) {
   };
 }
 
-function validateFileColumn_(
-  fileColumnText
-) {
+function validateFileColumn_(fileColumnText) {
   var normalized = fileColumnText
     ? fileColumnText
         .toString()
@@ -121,8 +116,41 @@ function validateFileColumn_(
       isValid: false,
       column: 0,
       error:
-        'File column harus berupa huruf kolom valid.\n' +
+        'Column harus berupa huruf kolom valid.\n' +
         'Contoh: J, AA, AB'
+    };
+  }
+  return {
+    isValid: true,
+    column: convertLetterToColumn(normalized),
+    error: ''
+  };
+}
+
+function validateOptionalExtensionColumn_(
+  extensionColumnText
+) {
+  var normalized = extensionColumnText
+    ? extensionColumnText
+        .toString()
+        .trim()
+        .toUpperCase()
+    : '';
+  if (!normalized) {
+    return {
+      isValid: true,
+      column: 0,
+      error: ''
+    };
+  }
+  if (!isValidColumnLetter_(normalized)) {
+    return {
+      isValid: false,
+      column: 0,
+      error:
+        'Extension column harus berupa huruf kolom valid.\n' +
+        'Contoh: H, AA, AB\n\n' +
+        'Kosongkan jika extension tidak dipisah.'
     };
   }
   return {
@@ -135,7 +163,8 @@ function validateFileColumn_(
 function validateInputColumns_(
   pathColumns,
   fileColumn,
-  rootIdColumn
+  rootIdColumn,
+  extensionColumn
 ) {
   if (
     !pathColumns ||
@@ -147,11 +176,45 @@ function validateInputColumns_(
         'Minimal satu path column harus dipilih.'
     };
   }
-  if (fileColumn === rootIdColumn) {
+  if (
+    fileColumn &&
+    fileColumn === rootIdColumn
+  ) {
     return {
       isValid: false,
       error:
         'File column dan RootID column tidak boleh sama.'
+    };
+  }
+  if (
+    extensionColumn &&
+    !fileColumn
+  ) {
+    return {
+      isValid: false,
+      error:
+        'Extension column hanya boleh dipakai jika File column diisi.'
+    };
+  }
+  if (
+    extensionColumn &&
+    fileColumn &&
+    extensionColumn === fileColumn
+  ) {
+    return {
+      isValid: false,
+      error:
+        'Extension column tidak boleh sama dengan File column.'
+    };
+  }
+  if (
+    extensionColumn &&
+    extensionColumn === rootIdColumn
+  ) {
+    return {
+      isValid: false,
+      error:
+        'Extension column tidak boleh sama dengan RootID column.'
     };
   }
   for (
@@ -160,6 +223,7 @@ function validateInputColumns_(
     i++
   ) {
     if (
+      fileColumn &&
       pathColumns[i] === fileColumn
     ) {
       return {
@@ -168,13 +232,21 @@ function validateInputColumns_(
           'File column tidak boleh digunakan sebagai path column.'
       };
     }
-    if (
-      pathColumns[i] === rootIdColumn
-    ) {
+    if (pathColumns[i] === rootIdColumn) {
       return {
         isValid: false,
         error:
           'RootID column tidak boleh digunakan sebagai path column.'
+      };
+    }
+    if (
+      extensionColumn &&
+      pathColumns[i] === extensionColumn
+    ) {
+      return {
+        isValid: false,
+        error:
+          'Extension column tidak boleh digunakan sebagai path column.'
       };
     }
   }
@@ -250,16 +322,22 @@ function confirmOutputDoesNotOverlapInputs_(
   pathColumns,
   fileColumn,
   rootIdColumn,
+  extensionColumn,
   targetColumn,
   outputWidth
 ) {
   var outputStart = targetColumn;
   var outputEnd =
     targetColumn + outputWidth - 1;
-  var inputColumns =
-    pathColumns.slice();
+var inputColumns =
+  pathColumns.slice();
+if (fileColumn) {
   inputColumns.push(fileColumn);
-  inputColumns.push(rootIdColumn);
+}
+inputColumns.push(rootIdColumn);
+if (extensionColumn) {
+  inputColumns.push(extensionColumn);
+}
   var overlappingColumns = [];
   var seen = {};
   for (

@@ -1,27 +1,22 @@
-/**
- * VERRACT v0.2.1-beta
- * Design Files Management Build
- * Author  : blackdjurix
- *
- * Feature : Multi-Path File Verification
- *
- * Highlights:
- * - Supports dynamic path-column selection
- * - Supports non-contiguous columns and column ranges
- * - Verifies filename against multiple candidate paths
- * - Skips duplicate normalized paths per row
- * - Stops at the first valid file match
- * - Adds workload protection for batch execution
- */
-
 var ENGINE_STATE_KEY = 'IS_ENGINE_RUNNING';
 
 /**
- * Input model is now dynamic.
+ * Input model is dynamic.
  *
- * Required:
- * - One or more path columns
- * - One filename column
+ * Supported input forms:
+ *
+ * 1. path + file.ext
+ *    - path column(s)
+ *    - filename column
+ *
+ * 2. path\file.ext
+ *    - full file reference inside path column(s)
+ *    - filename column may be blank
+ *
+ * 3. path + file + ext
+ *    - path column(s)
+ *    - filename column
+ *    - optional extension column
  *
  * Path examples:
  * B
@@ -30,6 +25,19 @@ var ENGINE_STATE_KEY = 'IS_ENGINE_RUNNING';
  */
 
 var MIN_PATH_COLUMN_COUNT = 1;
+
+/**
+ * Extension column is optional.
+ *
+ * If no extension column is provided:
+ * - filename column is treated as file.ext
+ *
+ * If extension column is provided:
+ * - filename + ext will be combined
+ * - extension may be written as "ai" or ".ai"
+ */
+
+var EXTENSION_COLUMN_OPTIONAL = true;
 
 /**
  * Maximum number of candidate path checks allowed
@@ -67,6 +75,7 @@ var METADATA_KEYS = [
   'AUTO_END_ROW',
   'AUTO_PATH_COLUMNS',
   'AUTO_FILE_COLUMN',
+  'AUTO_EXTENSION_COLUMN',
   'AUTO_TARGET_COL',
   'AUTO_SPREADSHEET_ID',
   'AUTO_SHEET_NAME',
@@ -77,10 +86,12 @@ var METADATA_KEYS = [
 ];
 
 var DEFAULT_BATCH_SIZE = 20;
+
 var MIN_BATCH_SIZE = 1;
 var MAX_BATCH_SIZE = 500;
 
 var DEFAULT_TRIGGER_GAP_MINUTES = 5;
+
 var MIN_TRIGGER_GAP_MINUTES = 5;
 var MAX_TRIGGER_GAP_MINUTES = 60;
 

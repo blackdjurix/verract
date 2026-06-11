@@ -1,6 +1,60 @@
 # Changelog
 
 <details>
+<summary>v0.2.2-beta - Flexible Verify Input Reference Parser</summary>
+
+### Features
+
+- Added flexible file reference parsing for the Verify phase.
+- Preserved existing `path + file.ext` input behavior.
+- Added support for full path input: `path\file.ext`.
+- Added support for optional split input: `path + file + ext`.
+- Added optional extension column handling.
+- Added blank File Column support for full-path mode.
+- Added runtime version metadata in `_version.gs`.
+- Added `About verract` menu item and popup.
+
+### Engine
+
+- Updated Verify engine flow to normalize file references before resolver execution.
+- Added support for inferring filename from the last segment of a full path.
+- Added support for combining filename and extension when extension is stored in a separate column.
+- Preserved multi-path first-match verification behavior.
+- Preserved fixed Verify output structure.
+
+### UX
+
+- Added default fallback for blank batch size prompt.
+- Added default fallback for blank trigger interval prompt.
+- Kept invalid non-numeric prompt input rejected.
+- Standardized project branding as all-lower-case `verract`.
+
+### Validation
+
+- Confirmed `path + file.ext` mode works.
+- Confirmed `path\file.ext` full-path mode works.
+- Confirmed `path + file + ext` mode works.
+- Confirmed first-match behavior remains unchanged.
+- Confirmed matched path-column output remains correct.
+- Confirmed checked path-count output remains correct.
+- Confirmed blank File Column works for full-path mode.
+
+### Known Limitations
+
+- Filename lookup currently supports exact matches only.
+- Wildcard filename patterns are not supported.
+- Full-path mode requires the path value to include both folder path and filename.
+- Final error output currently reflects only the last checked candidate path.
+
+### Notes
+
+- This release extends the Verify phase only.
+- Resolve functionality remains outside the scope of v0.2.2-beta.
+- Output field selection and custom output placement are planned for later configuration work.
+
+</details>
+
+<details>
 <summary>v0.2.1-beta - Multi-Path File Verification</summary>
 
 ### Features
