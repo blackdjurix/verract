@@ -482,7 +482,7 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
       throw new Error(
         'Engine metadata incomplete.'
       );
-    }    if (currentRow > endRow) {
+    } if (currentRow > endRow) {
       CLEAR_TRIGGER_AND_STATE();
       SpreadsheetApp
         .openById(spreadsheetId)
@@ -660,18 +660,27 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
         OUTPUT_WIDTH
       )
       .setValues(outputValues);
+    var nextRow = lastRow + 1;
+
     props.setProperty(
       'AUTO_CURRENT_ROW',
-      (lastRow + 1).toString()
+      nextRow.toString()
     );
+
     props.setProperty(
       'AUTO_LAST_SUCCESS_TS',
       Date.now().toString()
     );
-  } catch (err) {
-    handleRuntimeError_(
-      err,
-      props
-    );
-  }
+
+    if (nextRow > endRow) {
+      CLEAR_TRIGGER_AND_STATE();
+
+      SpreadsheetApp
+        .openById(spreadsheetId)
+        .toast(
+          'File verification completed.',
+          'VERRACT',
+          5
+        );
+    }
 }

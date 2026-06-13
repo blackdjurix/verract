@@ -3,17 +3,17 @@ var VERRACT_VERSION_INFO = {
   version: '0.3.0-beta',
   build: 'Design Files Management Build',
   author: 'blackdjurix',
-  feature: 'Resolve Foundation',
-highlights: [
-  'Introduces Resolve phase foundation',
-  'Adds Resolve configuration and state management',
-  'Supports Verify error interpretation',
-  'Supports object target extraction',
-  'Introduces Drive index candidate discovery',
-  'Supports Resolve result generation',
-  'Validates candidate lookup workflow',
-  'Prepares Resolve batch processing engine'
-]
+  feature: 'Resolve Batch Candidate Discovery'
+  highlights: [
+    'Introduces Resolve phase foundation',
+    'Supports Verify error interpretation',
+    'Supports object target extraction',
+    'Supports Drive index candidate discovery',
+    'Supports RootID-scoped candidate filtering',
+    'Supports Resolve batch processing',
+    'Supports Resolve result generation',
+    'Supports candidate discovery workflow'
+  ]
 };
 
 function SHOW_VERSION_INFO() {

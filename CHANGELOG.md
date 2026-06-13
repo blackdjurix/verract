@@ -1,6 +1,47 @@
 # Changelog
 
 <details>
+<summary><strong>v0.3.0-beta - Resolve Batch Candidate Discovery</strong></summary>
+
+### Added
+- Resolve configuration framework
+- Resolve metadata management
+- Resolve state cleanup integration
+- Resolve helper utilities
+- Verify error interpretation
+- Object target extraction from Verify inputs
+- Drive index candidate discovery
+- RootID-scoped candidate filtering
+- Resolve batch processing engine
+- Resolve trigger workflow
+- Resolve result builder
+- Resolve diagnostic test suite
+
+### Changed
+- Resolve strategy shifted from recursive folder traversal to Drive index search
+- Candidate discovery now targets actual objects instead of failed path segments
+- Resolve workflow now processes failed Verify rows only
+- Resolve output expanded to 8-column result structure
+
+### Validated
+- Verify error parsing workflow
+- Object target extraction workflow
+- Drive index candidate lookup
+- RootID candidate filtering
+- Single-match candidate resolution
+- Batch processing workflow
+- Resolve result generation
+- Verify context integration into Resolve notes
+
+### Notes
+- Resolve currently supports candidate discovery only
+- Resolve does not move, rename, delete, or create files
+- Resolve results are advisory and require manual review when multiple candidates exist
+- Action phase remains out of scope for v0.3.0-beta
+
+</details>
+
+<details>
 <summary><strong>v0.3.0-beta - Resolve Foundation</strong></summary>
 
 ### Added
