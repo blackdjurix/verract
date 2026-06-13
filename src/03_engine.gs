@@ -683,4 +683,10 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
           5
         );
     }
+  } catch (err) {
+    handleRuntimeError_(
+      err,
+      props
+    );
+  }
 }

@@ -28,17 +28,6 @@ function CREATE_RESOLVE_TRIGGER_MULTI() {
       return;
     }
     var ui = SpreadsheetApp.getUi();
-    var rootPrompt = ui.prompt(
-      'RootID Column',
-      'Masukkan huruf kolom RootID.\nContoh: C',
-      ui.ButtonSet.OK_CANCEL
-    );
-    if (rootPrompt.getSelectedButton() !== ui.Button.OK) return;
-    var rootText = rootPrompt.getResponseText().trim().toUpperCase();
-    if (!isValidColumnLetter_(rootText)) {
-      ui.alert('RootID column tidak valid.');
-      return;
-    }
     var pathPrompt = ui.prompt(
       'Path Column(s)',
       'Masukkan kolom path kandidat.\nContoh: D-F atau J',
@@ -67,6 +56,17 @@ function CREATE_RESOLVE_TRIGGER_MULTI() {
     if (extPrompt.getSelectedButton() !== ui.Button.OK) return;
     var extText = extPrompt.getResponseText().trim().toUpperCase();
     var extColumn = extText ? convertLetterToColumn(extText) : -1;
+    var rootPrompt = ui.prompt(
+      'RootID Column',
+      'Masukkan huruf kolom RootID.\nContoh: C',
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (rootPrompt.getSelectedButton() !== ui.Button.OK) return;
+    var rootText = rootPrompt.getResponseText().trim().toUpperCase();
+    if (!isValidColumnLetter_(rootText)) {
+      ui.alert('RootID column tidak valid.');
+      return;
+    }
     var verifyPrompt = ui.prompt(
       'Verify Output Start Column',
       'Masukkan huruf kolom awal output Verify.\nContoh: J / K\n\nUrutan Verify harus:\nExists | FileID | FileType | ParentID | VerifiedFilePath | MatchedPathColumn | CheckedPathCount | Error',

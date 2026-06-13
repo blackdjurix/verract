@@ -29,7 +29,8 @@ function deleteExistingTriggers_() {
   var triggers =
     ScriptApp.getProjectTriggers();
   var allowedHandlers = [
-    'TRIGGER_BATCH_AUDIT_MULTI'
+    'TRIGGER_BATCH_AUDIT_MULTI',
+    'TRIGGER_RESOLVE_BATCH_MULTI'
   ];
   for (
     var i = 0;

@@ -3,7 +3,7 @@ var VERRACT_VERSION_INFO = {
   version: '0.3.0-beta',
   build: 'Design Files Management Build',
   author: 'blackdjurix',
-  feature: 'Resolve Batch Candidate Discovery'
+  feature: 'Resolve Batch Candidate Discovery',
   highlights: [
     'Introduces Resolve phase foundation',
     'Supports Verify error interpretation',
