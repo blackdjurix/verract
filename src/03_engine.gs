@@ -563,10 +563,17 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
       rowOffset < numRows;
       rowOffset++
     ) {
-      if (
-        existingOutputValues[rowOffset][0] !==
-        ''
-      ) {
+      var existingExistsValue =
+        existingOutputValues[rowOffset][0];
+      var existingExistsText =
+        existingExistsValue === null ||
+        existingExistsValue === undefined
+          ? ''
+          : existingExistsValue
+              .toString()
+              .trim()
+              .toUpperCase();
+      if (existingExistsText === 'TRUE') {
         outputValues.push(
           existingOutputValues[rowOffset]
         );
@@ -661,20 +668,16 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
       )
       .setValues(outputValues);
     var nextRow = lastRow + 1;
-
     props.setProperty(
       'AUTO_CURRENT_ROW',
       nextRow.toString()
     );
-
     props.setProperty(
       'AUTO_LAST_SUCCESS_TS',
       Date.now().toString()
     );
-
     if (nextRow > endRow) {
       CLEAR_TRIGGER_AND_STATE();
-
       SpreadsheetApp
         .openById(spreadsheetId)
         .toast(

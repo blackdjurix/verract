@@ -259,17 +259,38 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
   var output = [];
   var batchCache = {};
   for (var i = 0; i < rowValues.length; i++) {
-    if (existingOutput[i][0] !== '') {
-      output.push(existingOutput[i]);
-      continue;
-    }
     var row = rowValues[i];
+
     var existsValue = getResolveRowValue_(row, verifyOutputColumn - 1);
+
     var errorValue = getResolveRowValue_(
       row,
       verifyOutputColumn + OUTPUT_WIDTH - 2
     );
-    if (!isFailedVerifyRow_(existsValue, errorValue)) {
+
+    var existsText =
+      existsValue === null ||
+      existsValue === undefined
+        ? ''
+        : existsValue
+            .toString()
+            .trim()
+            .toUpperCase();
+
+    var errorText =
+      errorValue === null ||
+      errorValue === undefined
+        ? ''
+        : errorValue
+            .toString()
+            .trim();
+
+    if (!existsText && !errorText) {
+      output.push(existingOutput[i]);
+      continue;
+    }
+
+    if (existsText === 'TRUE') {
       output.push(
         convertResolveResultToRow_(
           buildResolveResult_(
@@ -281,6 +302,29 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
             '',
             '',
             'Verify result is not failed.'
+          )
+        )
+      );
+      continue;
+    }
+
+    if (existingOutput[i][0] !== '') {
+      output.push(existingOutput[i]);
+      continue;
+    }
+
+    if (!isFailedVerifyRow_(existsValue, errorValue)) {
+      output.push(
+        convertResolveResultToRow_(
+          buildResolveResult_(
+            'SKIPPED',
+            '',
+            '',
+            '',
+            0,
+            '',
+            '',
+            'Verify result is not ready for Resolve.'
           )
         )
       );

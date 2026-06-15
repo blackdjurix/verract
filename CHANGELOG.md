@@ -1,7 +1,27 @@
 # Changelog
 
 <details>
-<summary><strong>v0.3.0-beta - Resolve Batch Candidate Discovery</strong></summary>
+<summary>v0.3.1-beta - Verify & Resolve Workflow Refinement</summary>
+
+### Added
+- Support rechecking failed Verify rows.
+- Support Resolve hold behavior for blank Verify results.
+
+### Changed
+- Verify now skips only rows with Exists=TRUE.
+- Verify now reprocesses rows with Exists=FALSE.
+- Resolve now preserves existing results for unresolved rows.
+- Resolve now updates to SKIPPED_ALREADY_VERIFIED when Verify becomes TRUE.
+
+### Improved
+- Better Verify → Resolve → Reverify workflow.
+- Better synchronization between Verify and Resolve phases.
+- Reduced manual cleanup requirements during iterative correction.
+
+</details>
+
+<details>
+<summary>v0.3.0-beta - Resolve Batch Candidate Discovery</summary>
 
 ### Added
 - Resolve configuration framework
@@ -42,7 +62,7 @@
 </details>
 
 <details>
-<summary><strong>v0.3.0-beta - Resolve Foundation</strong></summary>
+<summary>v0.3.0-beta - Resolve Foundation</summary>
 
 ### Added
 

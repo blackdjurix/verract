@@ -1,23 +1,23 @@
 var VERRACT_VERSION_INFO = {
   name: 'verract',
-  version: '0.3.0-beta',
+  version: '0.3.1-beta',
   build: 'Design Files Management Build',
   author: 'blackdjurix',
-  feature: 'Resolve Batch Candidate Discovery',
+  feature: 'Verify Recheck & Resolve Hold',
   highlights: [
-    'Introduces Resolve phase foundation',
-    'Supports Verify error interpretation',
-    'Supports object target extraction',
-    'Supports Drive index candidate discovery',
-    'Supports RootID-scoped candidate filtering',
-    'Supports Resolve batch processing',
-    'Supports Resolve result generation',
-    'Supports candidate discovery workflow'
+    'Supports rechecking failed Verify rows',
+    'Skips already verified TRUE rows',
+    'Allows FALSE Verify rows to be overwritten on rerun',
+    'Holds Resolve output when Verify result is still blank',
+    'Prevents Resolve from marking unverified rows as skipped',
+    'Improves Verify and Resolve rerun workflow',
+    'Keeps Resolve candidate discovery read-only'
   ]
 };
 
 function SHOW_VERSION_INFO() {
   var info = VERRACT_VERSION_INFO;
+
   var message =
     info.name +
     ' v' +
@@ -33,6 +33,7 @@ function SHOW_VERSION_INFO() {
     '\n\n' +
     'Highlights:\n- ' +
     info.highlights.join('\n- ');
+
   SpreadsheetApp.getUi().alert(
     'About ' + info.name,
     message,
