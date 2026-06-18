@@ -3,7 +3,9 @@ function CREATE_RESOLVE_TRIGGER_MULTI() {
   if (!config) {
     return;
   }
+
   var result = startResolveAutomation_(config);
+
   SpreadsheetApp
     .getActiveSpreadsheet()
     .toast(
@@ -17,6 +19,7 @@ function collectResolveConfigFromPrompts_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getActiveSheet();
   var range = sheet.getActiveRange();
+
   if (!range) {
     SpreadsheetApp
       .getUi()
@@ -25,151 +28,182 @@ function collectResolveConfigFromPrompts_() {
       );
     return null;
   }
+
   var ui = SpreadsheetApp.getUi();
+
   var pathPrompt = ui.prompt(
     'Path Column(s)',
     'Masukkan kolom path kandidat.\nContoh: D-F atau J',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     pathPrompt.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var pathText =
     pathPrompt
       .getResponseText()
       .trim()
       .toUpperCase();
+
   var pathColumns =
     parseResolveColumnSpec_(pathText);
+
   if (pathColumns.length === 0) {
     ui.alert('Path column tidak valid.');
     return null;
   }
+
   var filePrompt = ui.prompt(
     'File Column',
     'Masukkan huruf kolom file.\nKosongkan jika tidak ada.',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     filePrompt.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var fileText =
     filePrompt
       .getResponseText()
       .trim()
       .toUpperCase();
+
   var fileColumn =
     fileText
       ? convertLetterToColumn(fileText)
       : -1;
+
   var extPrompt = ui.prompt(
     'Extension Column',
     'Masukkan huruf kolom extension.\nKosongkan jika tidak ada.',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     extPrompt.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var extText =
     extPrompt
       .getResponseText()
       .trim()
       .toUpperCase();
+
   var extColumn =
     extText
       ? convertLetterToColumn(extText)
       : -1;
+
   var rootPrompt = ui.prompt(
     'RootID Column',
     'Masukkan huruf kolom RootID.\nContoh: C',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     rootPrompt.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var rootText =
     rootPrompt
       .getResponseText()
       .trim()
       .toUpperCase();
+
   if (!isValidColumnLetter_(rootText)) {
     ui.alert('RootID column tidak valid.');
     return null;
   }
+
   var verifyPrompt = ui.prompt(
     'Verify Output Start Column',
     'Masukkan huruf kolom awal output Verify.\nContoh: J / K\n\nUrutan Verify harus:\nExists | FileID | FileType | ParentID | VerifiedFilePath | MatchedPathColumn | CheckedPathCount | Error',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     verifyPrompt.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var verifyText =
     verifyPrompt
       .getResponseText()
       .trim()
       .toUpperCase();
+
   if (!isValidColumnLetter_(verifyText)) {
     ui.alert('Verify output column tidak valid.');
     return null;
   }
+
   var targetPrompt = ui.prompt(
     'Resolve Output Start Column',
     'Masukkan huruf kolom awal output Resolve.\n\nOutput:\nResolveStatus | ResolvedID | ResolvedType | ResolvedPath | MatchCount | MatchMethod | Confidence | ResolveNote',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     targetPrompt.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var targetText =
     targetPrompt
       .getResponseText()
       .trim()
       .toUpperCase();
+
   if (!isValidColumnLetter_(targetText)) {
     ui.alert('Resolve output column tidak valid.');
     return null;
   }
+
   var batchPrompt = ui.prompt(
     'Resolve Batch Size',
     'Masukkan jumlah row per batch.',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     batchPrompt.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var batchSize =
     parseInt(
       batchPrompt.getResponseText(),
       10
     );
+
   if (
     isNaN(batchSize) ||
     batchSize < RESOLVE_MIN_BATCH_SIZE
   ) {
     batchSize = RESOLVE_DEFAULT_BATCH_SIZE;
   }
+
   if (batchSize > RESOLVE_MAX_BATCH_SIZE) {
     ui.alert(
       'Batch terlalu besar. Maksimal: ' +
@@ -177,28 +211,33 @@ function collectResolveConfigFromPrompts_() {
     );
     return null;
   }
+
   var gapPrompt = ui.prompt(
     'Interval Menit',
     'Minimal 5 menit.',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     gapPrompt.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var gap =
     parseInt(
       gapPrompt.getResponseText(),
       10
     );
+
   if (
     isNaN(gap) ||
     gap < RESOLVE_MIN_TRIGGER_GAP_MINUTES
   ) {
     gap = RESOLVE_DEFAULT_TRIGGER_GAP_MINUTES;
   }
+
   if (gap > RESOLVE_MAX_TRIGGER_GAP_MINUTES) {
     ui.alert(
       'Interval terlalu besar. Maksimal: ' +
@@ -207,6 +246,7 @@ function collectResolveConfigFromPrompts_() {
     );
     return null;
   }
+
   return {
     startRow: range.getRow(),
     endRow:
@@ -232,20 +272,26 @@ function collectResolveConfigFromPrompts_() {
 function startResolveAutomation_(config) {
   var lock =
     LockService.getScriptLock();
+
   var lockReleased = false;
+
   if (!lock.tryLock(2000)) {
     throw new Error(
       'Server sedang sibuk.'
     );
   }
+
   try {
     var normalizedConfig =
       normalizeResolveAutomationConfig_(
         config
       );
+
     var props =
       PropertiesService.getScriptProperties();
+
     checkEngineHeartbeat_();
+
     if (
       props.getProperty(ENGINE_STATE_KEY) ===
       'TRUE'
@@ -254,15 +300,20 @@ function startResolveAutomation_(config) {
         'Automation masih aktif.'
       );
     }
+
     deleteExistingTriggers_();
+
     props.deleteProperty('AUTO_LAST_ERROR');
     props.deleteProperty('AUTO_BACKOFF_UNTIL');
+
     var timestampNow =
       Date.now().toString();
+
     props.setProperty(
       ENGINE_STATE_KEY,
       'TRUE'
     );
+
     props.setProperties({
       RESOLVE_CURRENT_ROW:
         normalizedConfig.startRow.toString(),
@@ -276,10 +327,18 @@ function startResolveAutomation_(config) {
         normalizedConfig.extensionColumn.toString(),
       RESOLVE_VERIFY_OUTPUT_COLUMN:
         normalizedConfig.verifyOutputColumn.toString(),
+      RESOLVE_VERIFY_OUTPUT_MAPPING:
+        serializeOutputMapping_(
+          normalizedConfig.verifyOutputMapping
+        ),
       RESOLVE_ROOT_ID_COLUMN:
         normalizedConfig.rootIdColumn.toString(),
       RESOLVE_TARGET_COL:
         normalizedConfig.resolveOutputColumn.toString(),
+      RESOLVE_OUTPUT_MAPPING:
+        serializeOutputMapping_(
+          normalizedConfig.outputMapping
+        ),
       RESOLVE_SPREADSHEET_ID:
         normalizedConfig.spreadsheetId,
       RESOLVE_SHEET_NAME:
@@ -291,6 +350,7 @@ function startResolveAutomation_(config) {
       RESOLVE_ENGINE_STARTED_AT:
         timestampNow
     });
+
     ScriptApp
       .newTrigger(
         'TRIGGER_RESOLVE_BATCH_MULTI'
@@ -300,9 +360,12 @@ function startResolveAutomation_(config) {
         normalizedConfig.triggerGapMinutes
       )
       .create();
+
     lock.releaseLock();
     lockReleased = true;
+
     TRIGGER_RESOLVE_BATCH_MULTI();
+
     return {
       success: true,
       mode: 'RESOLVE',
@@ -312,7 +375,7 @@ function startResolveAutomation_(config) {
       triggerGapMinutes:
         normalizedConfig.triggerGapMinutes,
       message:
-        'Resolve batch pertama langsung jalan.'
+        'Resolve automation started.'
     };
   } finally {
     if (!lockReleased) {
@@ -329,16 +392,22 @@ function normalizeResolveAutomationConfig_(config) {
       'Resolve config is required.'
     );
   }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getActiveSheet();
+
   var spreadsheetId =
     config.spreadsheetId || ss.getId();
+
   var sheetName =
     config.sheetName || sheet.getName();
+
   var startRow =
     parseInt(config.startRow, 10);
+
   var endRow =
     parseInt(config.endRow, 10);
+
   if (
     isNaN(startRow) ||
     isNaN(endRow) ||
@@ -349,60 +418,72 @@ function normalizeResolveAutomationConfig_(config) {
       'Resolve row range tidak valid.'
     );
   }
+
   var pathColumns =
     normalizeResolvePathColumns_(
       config.pathColumns
     );
+
   if (!pathColumns.length) {
     throw new Error(
       'Path column tidak valid.'
     );
   }
+
   var fileColumn =
     normalizeResolveOptionalColumn_(
       config.fileColumn
     );
+
   var extensionColumn =
     normalizeResolveOptionalColumn_(
       config.extensionColumn
     );
+
   var rootIdColumn =
     normalizeRequiredColumn_(
       config.rootIdColumn
     );
+
   var verifyOutputColumn =
     normalizeRequiredColumn_(
       config.verifyOutputColumn
     );
+
   var resolveOutputColumn =
     normalizeRequiredColumn_(
       config.resolveOutputColumn ||
         config.targetColumn
     );
+
   var batchSize =
     config.batchSize === '' ||
     config.batchSize === null ||
     config.batchSize === undefined
       ? RESOLVE_DEFAULT_BATCH_SIZE
       : parseInt(config.batchSize, 10);
+
   if (
     isNaN(batchSize) ||
     batchSize < RESOLVE_MIN_BATCH_SIZE
   ) {
     batchSize = RESOLVE_DEFAULT_BATCH_SIZE;
   }
+
   if (batchSize > RESOLVE_MAX_BATCH_SIZE) {
     throw new Error(
       'Batch terlalu besar. Maksimal: ' +
         RESOLVE_MAX_BATCH_SIZE
     );
   }
+
   var triggerGapMinutes =
     config.triggerGapMinutes === '' ||
     config.triggerGapMinutes === null ||
     config.triggerGapMinutes === undefined
       ? RESOLVE_DEFAULT_TRIGGER_GAP_MINUTES
       : parseInt(config.triggerGapMinutes, 10);
+
   if (
     isNaN(triggerGapMinutes) ||
     triggerGapMinutes <
@@ -411,6 +492,7 @@ function normalizeResolveAutomationConfig_(config) {
     triggerGapMinutes =
       RESOLVE_DEFAULT_TRIGGER_GAP_MINUTES;
   }
+
   if (
     triggerGapMinutes >
     RESOLVE_MAX_TRIGGER_GAP_MINUTES
@@ -421,6 +503,21 @@ function normalizeResolveAutomationConfig_(config) {
         ' menit.'
     );
   }
+
+  var verifyOutputMapping =
+    normalizeOutputMapping_(
+      config.verifyOutputMapping,
+      VERIFY_OUTPUT_FIELDS,
+      verifyOutputColumn
+    );
+
+  var outputMapping =
+    normalizeOutputMapping_(
+      config.outputMapping,
+      RESOLVE_OUTPUT_FIELDS,
+      resolveOutputColumn
+    );
+
   return {
     startRow: startRow,
     endRow: endRow,
@@ -429,8 +526,10 @@ function normalizeResolveAutomationConfig_(config) {
     extensionColumn: extensionColumn,
     rootIdColumn: rootIdColumn,
     verifyOutputColumn: verifyOutputColumn,
+    verifyOutputMapping: verifyOutputMapping,
     resolveOutputColumn:
       resolveOutputColumn,
+    outputMapping: outputMapping,
     batchSize: batchSize,
     triggerGapMinutes: triggerGapMinutes,
     spreadsheetId: spreadsheetId,
@@ -448,6 +547,7 @@ function normalizeResolvePathColumns_(value) {
         return !isNaN(column) && column > 0;
       });
   }
+
   return parseResolveColumnSpec_(
     value
       .toString()
@@ -466,19 +566,23 @@ function normalizeResolveOptionalColumn_(value) {
   ) {
     return -1;
   }
+
   if (
     typeof value === 'number' &&
     value > 0
   ) {
     return value;
   }
+
   if (!isValidColumnLetter_(value)) {
     throw new Error(
       'Optional column tidak valid.'
     );
   }
+
   return convertLetterToColumn(value);
 }
+
 
 function TRIGGER_RESOLVE_BATCH_MULTI() {
   var lock = LockService.getScriptLock();
@@ -552,6 +656,14 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
     props.getProperty('RESOLVE_VERIFY_OUTPUT_COLUMN'),
     10
   );
+  var verifyOutputMapping =
+    parseStoredOutputMapping_(
+      props.getProperty(
+        'RESOLVE_VERIFY_OUTPUT_MAPPING'
+      ),
+      VERIFY_OUTPUT_FIELDS,
+      verifyOutputColumn
+    );
   var rootIdColumn = parseInt(
     props.getProperty('RESOLVE_ROOT_ID_COLUMN'),
     10
@@ -560,22 +672,51 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
     props.getProperty('RESOLVE_TARGET_COL'),
     10
   );
+  var outputMapping =
+    parseStoredOutputMapping_(
+      props.getProperty(
+        'RESOLVE_OUTPUT_MAPPING'
+      ),
+      RESOLVE_OUTPUT_FIELDS,
+      targetColumn
+    );
   var lastColumn = sheet.getLastColumn();
   var rowValues = sheet
     .getRange(startRow, 1, numRows, lastColumn)
     .getValues();
-  var existingOutput = sheet
-    .getRange(startRow, targetColumn, numRows, RESOLVE_OUTPUT_WIDTH)
-    .getValues();
+  var existingOutput =
+    readMappedOutputRows_(
+      sheet,
+      startRow,
+      numRows,
+      outputMapping,
+      RESOLVE_OUTPUT_FIELDS
+    );
   var output = [];
   var batchCache = {};
+
+  var existsColumn =
+    verifyOutputMapping.Exists ||
+    verifyOutputColumn;
+  var errorColumn =
+    verifyOutputMapping.Error ||
+    (verifyOutputColumn + OUTPUT_WIDTH - 1);
+
   for (var i = 0; i < rowValues.length; i++) {
     var row = rowValues[i];
-    var existsValue = getResolveRowValue_(row, verifyOutputColumn - 1);
-    var errorValue = getResolveRowValue_(
-      row,
-      verifyOutputColumn + OUTPUT_WIDTH - 2
-    );
+
+    var existsValue =
+      getResolveRowValue_(
+        row,
+        existsColumn - 1
+      );
+
+    var errorValue =
+      getResolveRowValue_(
+        row,
+        errorColumn - 1
+      );
+
     var existsText =
       existsValue === null ||
       existsValue === undefined
@@ -584,6 +725,7 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
             .toString()
             .trim()
             .toUpperCase();
+
     var errorText =
       errorValue === null ||
       errorValue === undefined
@@ -591,94 +733,127 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
         : errorValue
             .toString()
             .trim();
+
     if (!existsText && !errorText) {
       output.push(existingOutput[i]);
       continue;
     }
+
     if (existsText === 'TRUE') {
       output.push(
-        convertResolveResultToRow_(
-          buildResolveResult_(
-            'SKIPPED_ALREADY_VERIFIED',
-            '',
-            '',
-            '',
-            0,
-            '',
-            '',
-            'Verify result is not failed.'
+        convertResolveRowToObject_(
+          convertResolveResultToRow_(
+            buildResolveResult_(
+              'SKIPPED_ALREADY_VERIFIED',
+              '',
+              '',
+              '',
+              0,
+              '',
+              '',
+              'Verify result is not failed.'
+            )
           )
         )
       );
       continue;
     }
-    if (existingOutput[i][0] !== '') {
+
+    if (
+      getMappedValue_(
+        existingOutput[i],
+        'ResolveStatus'
+      ) !== ''
+    ) {
       output.push(existingOutput[i]);
       continue;
     }
+
     if (!isFailedVerifyRow_(existsValue, errorValue)) {
       output.push(
-        convertResolveResultToRow_(
-          buildResolveResult_(
-            'SKIPPED',
-            '',
-            '',
-            '',
-            0,
-            '',
-            '',
-            'Verify result is not ready for Resolve.'
+        convertResolveRowToObject_(
+          convertResolveResultToRow_(
+            buildResolveResult_(
+              'SKIPPED',
+              '',
+              '',
+              '',
+              0,
+              '',
+              '',
+              'Verify result is not ready for Resolve.'
+            )
           )
         )
       );
       continue;
     }
-    var rootId = getResolveRowValue_(row, rootIdColumn - 1);
-    var objectTarget = extractResolveObjectTargetFromInputRow_(
-      row,
-      pathColumns,
-      fileColumn,
-      extColumn
-    );
-    var verifyContext = extractResolveTargetFromError_(errorValue);
+
+    var rootId =
+      getResolveRowValue_(
+        row,
+        rootIdColumn - 1
+      );
+
+    var objectTarget =
+      extractResolveObjectTargetFromInputRow_(
+        row,
+        pathColumns,
+        fileColumn,
+        extColumn
+      );
+
+    var verifyContext =
+      extractResolveTargetFromError_(
+        errorValue
+      );
+
     if (!rootId) {
       output.push(
-        convertResolveResultToRow_(
-          buildResolveResult_(
-            'ERROR',
-            '',
-            '',
-            '',
-            0,
-            objectTarget.method,
-            '',
-            'Missing RootID.'
+        convertResolveRowToObject_(
+          convertResolveResultToRow_(
+            buildResolveResult_(
+              'ERROR',
+              '',
+              '',
+              '',
+              0,
+              objectTarget.method,
+              '',
+              'Missing RootID.'
+            )
           )
         )
       );
       continue;
     }
+
     if (!objectTarget.shouldSearch) {
       output.push(
-        convertResolveResultToRow_(
-          buildResolveResultFromSearch_(
-            objectTarget,
-            {
-              matches: [],
-              matchCount: 0,
-              error: ''
-            },
-            verifyContext
+        convertResolveRowToObject_(
+          convertResolveResultToRow_(
+            buildResolveResultFromSearch_(
+              objectTarget,
+              {
+                matches: [],
+                matchCount: 0,
+                error: ''
+              },
+              verifyContext
+            )
           )
         )
       );
       continue;
     }
-    var cacheKey = buildResolveSearchCacheKey_(
-      rootId,
-      objectTarget.type,
-      objectTarget.target
-    );
+
+    var cacheKey =
+      buildResolveSearchCacheKey_(
+        rootId,
+        objectTarget.type,
+        objectTarget.target
+      );
+
     if (!batchCache[cacheKey]) {
       batchCache[cacheKey] =
         searchResolveObjectsByDriveIndex_(
@@ -687,18 +862,30 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
           objectTarget.type
         );
     }
-    var result = buildResolveResultFromSearch_(
-      objectTarget,
-      batchCache[cacheKey],
-      verifyContext
-    );
+
+    var result =
+      buildResolveResultFromSearch_(
+        objectTarget,
+        batchCache[cacheKey],
+        verifyContext
+      );
+
     output.push(
-      convertResolveResultToRow_(result)
+      convertResolveRowToObject_(
+        convertResolveResultToRow_(
+          result
+        )
+      )
     );
   }
-  sheet
-    .getRange(startRow, targetColumn, numRows, RESOLVE_OUTPUT_WIDTH)
-    .setValues(output);
+
+  writeMappedOutputRows_(
+    sheet,
+    startRow,
+    output,
+    outputMapping,
+    RESOLVE_OUTPUT_FIELDS
+  );
 }
 
 function extractResolveTargetFromError_(errorValue) {

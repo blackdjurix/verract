@@ -449,3 +449,411 @@ function confirmNonBlankMainOutput_(
   );
   return response === ui.Button.OK;
 }
+
+function normalizeOutputMapping_(
+  mapping,
+  allowedFields,
+  fallbackStartColumn
+) {
+  var normalized = {};
+  var hasMapping =
+    mapping !== null &&
+    mapping !== undefined;
+
+  if (
+    !hasMapping &&
+    fallbackStartColumn
+  ) {
+    return buildSequentialOutputMapping_(
+      allowedFields,
+      fallbackStartColumn
+    );
+  }
+
+  if (!mapping) {
+    mapping = {};
+  }
+
+  for (
+    var i = 0;
+    i < allowedFields.length;
+    i++
+  ) {
+    var field = allowedFields[i];
+    var columnValue = mapping[field];
+
+    if (
+      columnValue === null ||
+      columnValue === undefined ||
+      columnValue === ''
+    ) {
+      continue;
+    }
+
+    var columnNumber =
+      normalizeOutputColumnValue_(
+        columnValue
+      );
+
+    normalized[field] = columnNumber;
+  }
+
+  var validation =
+    validateOutputMapping_(
+      normalized,
+      allowedFields
+    );
+
+  if (!validation.isValid) {
+    throw new Error(
+      validation.error
+    );
+  }
+
+  return normalized;
+}
+
+function normalizeOutputColumnValue_(
+  columnValue
+) {
+  if (
+    typeof columnValue === 'number' &&
+    columnValue > 0
+  ) {
+    return columnValue;
+  }
+
+  var text = columnValue
+    ? columnValue.toString().trim().toUpperCase()
+    : '';
+
+  if (!text) {
+    throw new Error(
+      'Output column tidak boleh kosong.'
+    );
+  }
+
+  if (!isValidColumnLetter_(text)) {
+    throw new Error(
+      'Output column tidak valid: ' + text
+    );
+  }
+
+  return convertLetterToColumn(text);
+}
+
+function buildSequentialOutputMapping_(
+  fields,
+  startColumn
+) {
+  var mapping = {};
+  var start =
+    typeof startColumn === 'number'
+      ? startColumn
+      : normalizeOutputColumnValue_(
+          startColumn
+        );
+
+  for (
+    var i = 0;
+    i < fields.length;
+    i++
+  ) {
+    mapping[fields[i]] = start + i;
+  }
+
+  return mapping;
+}
+
+function validateOutputMapping_(
+  mapping,
+  allowedFields
+) {
+  var selectedCount = 0;
+  var seenColumns = {};
+  var allowedMap = {};
+
+  for (
+    var i = 0;
+    i < allowedFields.length;
+    i++
+  ) {
+    allowedMap[allowedFields[i]] = true;
+  }
+
+  for (var field in mapping) {
+    if (!mapping.hasOwnProperty(field)) {
+      continue;
+    }
+
+    if (!allowedMap[field]) {
+      return {
+        isValid: false,
+        error:
+          'Unknown output field: ' +
+          field
+      };
+    }
+
+    var columnNumber =
+      parseInt(mapping[field], 10);
+
+    if (
+      isNaN(columnNumber) ||
+      columnNumber < 1
+    ) {
+      return {
+        isValid: false,
+        error:
+          'Invalid output column for ' +
+          field +
+          '.'
+      };
+    }
+
+    if (seenColumns[columnNumber]) {
+      return {
+        isValid: false,
+        error:
+          'Duplicate output column: ' +
+          convertColumnToLetter_(
+            columnNumber
+          )
+      };
+    }
+
+    seenColumns[columnNumber] = true;
+    selectedCount++;
+  }
+
+  if (selectedCount === 0) {
+    return {
+      isValid: false,
+      error:
+        'At least one output field must be selected.'
+    };
+  }
+
+  return {
+    isValid: true,
+    error: ''
+  };
+}
+
+function serializeOutputMapping_(
+  mapping
+) {
+  return JSON.stringify(
+    mapping || {}
+  );
+}
+
+function parseStoredOutputMapping_(
+  jsonText,
+  allowedFields,
+  fallbackStartColumn
+) {
+  if (!jsonText) {
+    return normalizeOutputMapping_(
+      null,
+      allowedFields,
+      fallbackStartColumn
+    );
+  }
+
+  try {
+    return normalizeOutputMapping_(
+      JSON.parse(jsonText),
+      allowedFields,
+      fallbackStartColumn
+    );
+  } catch (err) {
+    return normalizeOutputMapping_(
+      null,
+      allowedFields,
+      fallbackStartColumn
+    );
+  }
+}
+
+function readMappedOutputRows_(
+  sheet,
+  startRow,
+  numRows,
+  mapping,
+  fields
+) {
+  var rows = [];
+
+  for (
+    var r = 0;
+    r < numRows;
+    r++
+  ) {
+    rows.push({});
+  }
+
+  for (
+    var i = 0;
+    i < fields.length;
+    i++
+  ) {
+    var field = fields[i];
+    var column = mapping[field];
+
+    if (!column) {
+      continue;
+    }
+
+    var values = sheet
+      .getRange(
+        startRow,
+        column,
+        numRows,
+        1
+      )
+      .getValues();
+
+    for (
+      var rowIndex = 0;
+      rowIndex < numRows;
+      rowIndex++
+    ) {
+      rows[rowIndex][field] =
+        values[rowIndex][0];
+    }
+  }
+
+  return rows;
+}
+
+function writeMappedOutputRows_(
+  sheet,
+  startRow,
+  rowObjects,
+  mapping,
+  fields
+) {
+  var numRows = rowObjects.length;
+
+  if (numRows === 0) {
+    return;
+  }
+
+  for (
+    var i = 0;
+    i < fields.length;
+    i++
+  ) {
+    var field = fields[i];
+    var column = mapping[field];
+
+    if (!column) {
+      continue;
+    }
+
+    var values = [];
+
+    for (
+      var rowIndex = 0;
+      rowIndex < numRows;
+      rowIndex++
+    ) {
+      values.push([
+        rowObjects[rowIndex][field] ===
+          undefined
+          ? ''
+          : rowObjects[rowIndex][field]
+      ]);
+    }
+
+    sheet
+      .getRange(
+        startRow,
+        column,
+        numRows,
+        1
+      )
+      .setValues(values);
+  }
+}
+
+function convertVerifyResultToObject_(
+  result
+) {
+  return {
+    Exists: result.exists,
+    Type:
+      result.type ||
+      result.fileType ||
+      '',
+    CheckedPathCount:
+      result.checkedPathCount || 0,
+    MatchedPathColumn:
+      result.matchedPathColumn || '',
+    FileID: result.fileId || '',
+    PathID:
+      result.pathId ||
+      result.parentId ||
+      '',
+    VerifiedFilePath:
+      result.verifiedFilePath || '',
+    Error: result.error || ''
+  };
+}
+
+function buildVerifyOutputObject_(
+  exists,
+  type,
+  checkedPathCount,
+  matchedPathColumn,
+  fileId,
+  pathId,
+  verifiedFilePath,
+  error
+) {
+  return {
+    Exists: exists,
+    Type: type || '',
+    CheckedPathCount:
+      checkedPathCount || 0,
+    MatchedPathColumn:
+      matchedPathColumn || '',
+    FileID: fileId || '',
+    PathID: pathId || '',
+    VerifiedFilePath:
+      verifiedFilePath || '',
+    Error: error || ''
+  };
+}
+
+function convertResolveRowToObject_(
+  row
+) {
+  row = row || [];
+
+  return {
+    ResolveStatus: row[0] || '',
+    ResolvedID: row[1] || '',
+    ResolvedType: row[2] || '',
+    ResolvedPath: row[3] || '',
+    MatchCount: row[4] || 0,
+    MatchMethod: row[5] || '',
+    Confidence: row[6] || '',
+    ResolveNote: row[7] || ''
+  };
+}
+
+function getMappedValue_(
+  rowObject,
+  field
+) {
+  if (!rowObject) {
+    return '';
+  }
+
+  return rowObject[field] ===
+    undefined
+    ? ''
+    : rowObject[field];
+}

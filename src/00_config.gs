@@ -76,3 +76,43 @@ var RESOLVE_MIN_TRIGGER_GAP_MINUTES = 5;
 var RESOLVE_MAX_TRIGGER_GAP_MINUTES = 60;
 
 var RESOLVE_MAX_CANDIDATES_PER_ROW = 10;
+
+/**
+ * Verify output fields.
+ *
+ * Output mapping supports non-contiguous columns.
+ * Each field may be enabled or disabled from the HTML sidebar.
+ */
+var VERIFY_OUTPUT_FIELDS = [
+  'Exists',
+  'Type',
+  'CheckedPathCount',
+  'MatchedPathColumn',
+  'FileID',
+  'PathID',
+  'VerifiedFilePath',
+  'Error'
+];
+
+var VERIFY_OUTPUT_MAPPING_PROPERTY =
+  'VERIFY_OUTPUT_MAPPING';
+
+/**
+ * Resolve output fields.
+ *
+ * Output mapping supports non-contiguous columns.
+ * Each field may be enabled or disabled from the HTML sidebar.
+ */
+var RESOLVE_OUTPUT_FIELDS = [
+  'ResolveStatus',
+  'ResolvedID',
+  'ResolvedType',
+  'ResolvedPath',
+  'MatchCount',
+  'MatchMethod',
+  'Confidence',
+  'ResolveNote'
+];
+
+var RESOLVE_OUTPUT_MAPPING_PROPERTY =
+  'RESOLVE_OUTPUT_MAPPING';

@@ -12,6 +12,7 @@
         --muted: #5f6368;
         --danger: #b3261e;
       }
+
       body {
         margin: 0;
         padding: 14px;
@@ -20,19 +21,31 @@
         color: var(--text);
         background: var(--bg);
       }
+
       h1 {
         margin: 0;
         font-size: 22px;
         font-weight: 700;
       }
+
       .version {
         margin-top: 3px;
         color: var(--muted);
         font-size: 12px;
       }
-      .topbar { margin-bottom: 12px; }
-      .view { display: none; }
-      .view.active { display: block; }
+
+      .topbar {
+        margin-bottom: 12px;
+      }
+
+      .view {
+        display: none;
+      }
+
+      .view.active {
+        display: block;
+      }
+
       .section {
         margin-bottom: 12px;
         padding: 12px;
@@ -40,23 +53,30 @@
         border: 1px solid var(--border);
         border-radius: 8px;
       }
+
       .section-title {
         margin-bottom: 10px;
         font-weight: 700;
         font-size: 14px;
       }
+
       .status-row {
         display: flex;
         justify-content: space-between;
         gap: 8px;
         margin: 5px 0;
       }
-      .label { color: var(--muted); }
+
+      .label {
+        color: var(--muted);
+      }
+
       .value {
         text-align: right;
         font-weight: 600;
         word-break: break-word;
       }
+
       label {
         display: block;
         margin: 8px 0 4px;
@@ -64,6 +84,7 @@
         font-size: 12px;
         font-weight: 600;
       }
+
       input {
         box-sizing: border-box;
         width: 100%;
@@ -72,15 +93,23 @@
         border-radius: 6px;
         font-size: 13px;
       }
+
+      input[type='checkbox'] {
+        width: auto;
+        margin: 0;
+      }
+
       input:focus {
         outline: none;
         border-color: var(--blue);
       }
+
       .grid-2 {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
       }
+
       button {
         width: 100%;
         margin: 5px 0;
@@ -91,16 +120,41 @@
         cursor: pointer;
         font-size: 13px;
       }
-      button:hover:not(:disabled) { background: #f1f3f4; }
-      button:disabled { cursor: not-allowed; opacity: 0.55; }
+
+      button:hover:not(:disabled) {
+        background: #f1f3f4;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
       button.primary {
         background: var(--blue);
         color: #ffffff;
         border-color: var(--blue);
       }
-      button.primary:hover:not(:disabled) { background: #1765cc; }
-      button.danger { color: var(--danger); }
-      button.nav { text-align: left; font-weight: 700; }
+
+      button.primary:hover:not(:disabled) {
+        background: #1765cc;
+      }
+
+      button.danger {
+        color: var(--danger);
+      }
+
+      button.nav {
+        text-align: left;
+        font-weight: 700;
+      }
+
+      .button-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+
       .message {
         margin-top: 10px;
         padding: 8px;
@@ -111,33 +165,86 @@
         min-height: 16px;
         white-space: pre-wrap;
       }
+
       .hint {
         margin-top: 6px;
         color: var(--muted);
         font-size: 11px;
         line-height: 1.35;
       }
+
+      .mapping-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+      }
+
+      .mapping-table th {
+        text-align: left;
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 600;
+        padding: 3px 2px;
+      }
+
+      .mapping-table td {
+        padding: 4px 2px;
+        vertical-align: middle;
+      }
+
+      .mapping-table .check-cell {
+        width: 24px;
+      }
+
+      .mapping-table .field-cell {
+        font-size: 12px;
+      }
+
+      .mapping-table .column-cell {
+        width: 58px;
+      }
+
+      .mapping-table input.output-column {
+        padding: 5px 6px;
+        text-transform: uppercase;
+      }
     </style>
   </head>
+
   <body>
     <div class="topbar">
       <h1>verract</h1>
-      <div class="version">v0.3.2-beta · multiview-fix-3</div>
+      <div class="version">v0.3.3 · custom-output-mapping</div>
     </div>
+
     <div id="homeView" class="view active">
       <div class="section">
         <div class="section-title">Status</div>
-        <div class="status-row"><div class="label">Engine</div><div class="value" id="homeStatus">Loading...</div></div>
-        <div class="status-row"><div class="label">Mode</div><div class="value" id="homeMode">-</div></div>
-        <div class="status-row"><div class="label">Sheet</div><div class="value" id="homeSheet">-</div></div>
-        <div class="status-row"><div class="label">Row</div><div class="value" id="homeRows">-</div></div>
+        <div class="status-row">
+          <div class="label">Engine</div>
+          <div class="value" id="homeStatus">Loading...</div>
+        </div>
+        <div class="status-row">
+          <div class="label">Mode</div>
+          <div class="value" id="homeMode">-</div>
+        </div>
+        <div class="status-row">
+          <div class="label">Sheet</div>
+          <div class="value" id="homeSheet">-</div>
+        </div>
+        <div class="status-row">
+          <div class="label">Row</div>
+          <div class="value" id="homeRows">-</div>
+        </div>
       </div>
+
       <div class="section">
         <div class="section-title">Workflow</div>
         <button class="nav" id="openVerifyButton" type="button">⏰ Verify</button>
         <button class="nav" id="openResolveButton" type="button">🔎 Resolve</button>
         <div class="hint">Select the row range in the sheet first, then open Verify or Resolve.</div>
       </div>
+
       <div class="section">
         <div class="section-title">Controls</div>
         <button id="refreshStatusButton" type="button">Refresh Status</button>
@@ -146,121 +253,289 @@
         <div class="message" id="homeMessage">Ready.</div>
       </div>
     </div>
+
     <div id="verifyView" class="view">
       <button id="backFromVerifyButton" type="button">← Back to Home</button>
+
       <div class="section">
         <div class="section-title">Status</div>
-        <div class="status-row"><div class="label">Engine</div><div class="value" id="verifyStatus">-</div></div>
-        <div class="status-row"><div class="label">Mode</div><div class="value" id="verifyMode">-</div></div>
+        <div class="status-row">
+          <div class="label">Engine</div>
+          <div class="value" id="verifyStatus">-</div>
+        </div>
+        <div class="status-row">
+          <div class="label">Mode</div>
+          <div class="value" id="verifyMode">-</div>
+        </div>
       </div>
+
       <div class="section">
         <div class="section-title">Verify Selection</div>
         <button id="verifyRefreshSelectionBtn" type="button">Refresh Selection</button>
-        <div class="status-row"><div class="label">Sheet</div><div class="value" id="verifySelectionSheet">Reading...</div></div>
-        <div class="status-row"><div class="label">Range</div><div class="value" id="verifySelectionRange">Reading...</div></div>
-        <div class="status-row"><div class="label">Rows</div><div class="value" id="verifySelectionRows">Reading...</div></div>
+        <div class="status-row">
+          <div class="label">Sheet</div>
+          <div class="value" id="verifySelectionSheet">Reading...</div>
+        </div>
+        <div class="status-row">
+          <div class="label">Range</div>
+          <div class="value" id="verifySelectionRange">Reading...</div>
+        </div>
+        <div class="status-row">
+          <div class="label">Rows</div>
+          <div class="value" id="verifySelectionRows">Reading...</div>
+        </div>
         <div class="hint">Select another range in the sheet and click Refresh Selection to update this snapshot.</div>
       </div>
+
       <div class="section">
         <div class="section-title">Verify Config</div>
+
         <label>Path Column(s)</label>
         <input id="verifyPathColumns" value="D-G" placeholder="D, D-G, D,E,G">
+
         <div class="grid-2">
-          <div><label>File Column</label><input id="verifyFileColumn" value="H" placeholder="H"></div>
-          <div><label>Extension Column</label><input id="verifyExtensionColumn" value="" placeholder="optional"></div>
+          <div>
+            <label>File Column</label>
+            <input id="verifyFileColumn" value="H" placeholder="H">
+          </div>
+          <div>
+            <label>Extension Column</label>
+            <input id="verifyExtensionColumn" value="" placeholder="optional">
+          </div>
         </div>
+
         <div class="grid-2">
-          <div><label>RootID Column</label><input id="verifyRootIdColumn" value="C" placeholder="C"></div>
-          <div><label>Output Column</label><input id="verifyOutputColumn" value="I" placeholder="I"></div>
+          <div>
+            <label>RootID Column</label>
+            <input id="verifyRootIdColumn" value="C" placeholder="C">
+          </div>
+          <div>
+            <label>Fallback Output Start</label>
+            <input id="verifyOutputColumn" value="I" placeholder="I">
+          </div>
         </div>
+
         <div class="grid-2">
-          <div><label>Batch Size</label><input id="verifyBatchSize" value="50" type="number" min="1"></div>
-          <div><label>Trigger Gap</label><input id="verifyTriggerGap" value="5" type="number" min="5"></div>
+          <div>
+            <label>Batch Size</label>
+            <input id="verifyBatchSize" value="50" type="number" min="1">
+          </div>
+          <div>
+            <label>Trigger Gap</label>
+            <input id="verifyTriggerGap" value="5" type="number" min="5">
+          </div>
         </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Verify Output Mapping</div>
+        <div class="button-row">
+          <button id="verifySelectAllOutputs" type="button">Select All</button>
+          <button id="verifyClearAllOutputs" type="button">Clear All</button>
+        </div>
+        <table class="mapping-table" id="verifyOutputMappingTable"></table>
+        <div class="hint">Checked fields will be written to their assigned columns. If nothing is checked, Run Verify will be blocked.</div>
         <button class="primary" id="runVerifyButton" type="button">Run Verify</button>
         <div class="message" id="verifyMessage">Selection snapshot loading...</div>
       </div>
     </div>
+
     <div id="resolveView" class="view">
       <button id="backFromResolveButton" type="button">← Back to Home</button>
+
       <div class="section">
         <div class="section-title">Status</div>
-        <div class="status-row"><div class="label">Engine</div><div class="value" id="resolveStatus">-</div></div>
-        <div class="status-row"><div class="label">Mode</div><div class="value" id="resolveMode">-</div></div>
+        <div class="status-row">
+          <div class="label">Engine</div>
+          <div class="value" id="resolveStatus">-</div>
+        </div>
+        <div class="status-row">
+          <div class="label">Mode</div>
+          <div class="value" id="resolveMode">-</div>
+        </div>
       </div>
+
       <div class="section">
         <div class="section-title">Resolve Selection</div>
         <button id="resolveRefreshSelectionBtn" type="button">Refresh Selection</button>
-        <div class="status-row"><div class="label">Sheet</div><div class="value" id="resolveSelectionSheet">Reading...</div></div>
-        <div class="status-row"><div class="label">Range</div><div class="value" id="resolveSelectionRange">Reading...</div></div>
-        <div class="status-row"><div class="label">Rows</div><div class="value" id="resolveSelectionRows">Reading...</div></div>
+        <div class="status-row">
+          <div class="label">Sheet</div>
+          <div class="value" id="resolveSelectionSheet">Reading...</div>
+        </div>
+        <div class="status-row">
+          <div class="label">Range</div>
+          <div class="value" id="resolveSelectionRange">Reading...</div>
+        </div>
+        <div class="status-row">
+          <div class="label">Rows</div>
+          <div class="value" id="resolveSelectionRows">Reading...</div>
+        </div>
         <div class="hint">Select another range in the sheet and click Refresh Selection to update this snapshot.</div>
       </div>
+
       <div class="section">
         <div class="section-title">Resolve Config</div>
+
         <label>Path Column(s)</label>
         <input id="resolvePathColumns" value="D-G" placeholder="D, D-G, D,E,G">
+
         <div class="grid-2">
-          <div><label>File Column</label><input id="resolveFileColumn" value="H" placeholder="H / optional"></div>
-          <div><label>Extension Column</label><input id="resolveExtensionColumn" value="" placeholder="optional"></div>
+          <div>
+            <label>File Column</label>
+            <input id="resolveFileColumn" value="H" placeholder="H / optional">
+          </div>
+          <div>
+            <label>Extension Column</label>
+            <input id="resolveExtensionColumn" value="" placeholder="optional">
+          </div>
         </div>
+
         <div class="grid-2">
-          <div><label>RootID Column</label><input id="resolveRootIdColumn" value="C" placeholder="C"></div>
-          <div><label>Verify Output Column</label><input id="resolveVerifyOutputColumn" value="I" placeholder="I"></div>
+          <div>
+            <label>RootID Column</label>
+            <input id="resolveRootIdColumn" value="C" placeholder="C">
+          </div>
+          <div>
+            <label>Verify Output Start</label>
+            <input id="resolveVerifyOutputColumn" value="I" placeholder="I">
+          </div>
         </div>
+
         <div class="grid-2">
-          <div><label>Resolve Output Column</label><input id="resolveOutputColumn" value="Q" placeholder="Q"></div>
-          <div><label>Batch Size</label><input id="resolveBatchSize" value="100" type="number" min="1"></div>
+          <div>
+            <label>Fallback Output Start</label>
+            <input id="resolveOutputColumn" value="Q" placeholder="Q">
+          </div>
+          <div>
+            <label>Batch Size</label>
+            <input id="resolveBatchSize" value="100" type="number" min="1">
+          </div>
         </div>
+
         <label>Trigger Gap</label>
         <input id="resolveTriggerGap" value="5" type="number" min="5">
+      </div>
+
+      <div class="section">
+        <div class="section-title">Resolve Output Mapping</div>
+        <div class="button-row">
+          <button id="resolveSelectAllOutputs" type="button">Select All</button>
+          <button id="resolveClearAllOutputs" type="button">Clear All</button>
+        </div>
+        <table class="mapping-table" id="resolveOutputMappingTable"></table>
+        <div class="hint">Checked fields will be written to their assigned columns. If nothing is checked, Run Resolve will be blocked.</div>
         <button class="primary" id="runResolveButton" type="button">Run Resolve</button>
         <div class="message" id="resolveMessage">Selection snapshot loading...</div>
       </div>
     </div>
+
     <script>
+      var VERIFY_OUTPUT_FIELDS = [
+        'Exists',
+        'Type',
+        'CheckedPathCount',
+        'MatchedPathColumn',
+        'FileID',
+        'PathID',
+        'VerifiedFilePath',
+        'Error'
+      ];
+
+      var RESOLVE_OUTPUT_FIELDS = [
+        'ResolveStatus',
+        'ResolvedID',
+        'ResolvedType',
+        'ResolvedPath',
+        'MatchCount',
+        'MatchMethod',
+        'Confidence',
+        'ResolveNote'
+      ];
+
+      var DEFAULT_VERIFY_COLUMNS = {
+        Exists: 'I',
+        Type: 'J',
+        CheckedPathCount: 'K',
+        MatchedPathColumn: 'L',
+        FileID: 'M',
+        PathID: 'N',
+        VerifiedFilePath: 'O',
+        Error: 'P'
+      };
+
+      var DEFAULT_RESOLVE_COLUMNS = {
+        ResolveStatus: 'Q',
+        ResolvedID: 'R',
+        ResolvedType: 'S',
+        ResolvedPath: 'T',
+        MatchCount: 'U',
+        MatchMethod: 'V',
+        Confidence: 'W',
+        ResolveNote: 'X'
+      };
+
       var selectionByWorkflow = {
         verify: null,
         resolve: null
       };
+
+      var savedOutputMapping = {
+        verify: {},
+        resolve: {}
+      };
+
       function byId(id) {
         return document.getElementById(id);
       }
+
       function valueOf(id) {
         return byId(id).value.trim();
       }
+
       function setText(id, value) {
         byId(id).textContent = value || '-';
       }
+
       function setMessage(id, value) {
         byId(id).textContent = value || '';
       }
+
       function showView(viewId) {
-        var views = document.querySelectorAll('.view');
+        var views =
+          document.querySelectorAll('.view');
+
         for (var i = 0; i < views.length; i++) {
           views[i].classList.remove('active');
         }
+
         byId(viewId).classList.add('active');
         refreshStatus();
       }
+
       function openWorkflow(workflow) {
         selectionByWorkflow[workflow] = null;
+
         showView(workflow + 'View');
         renderSelection(workflow, null);
+
         setMessage(
           workflow + 'Message',
           'Reading selected range...'
         );
+
         refreshSelectionForView(workflow);
       }
+
       function renderSelection(workflow, selection) {
         var prefix = workflow + 'Selection';
+
         if (!selection) {
           setText(prefix + 'Sheet', '-');
           setText(prefix + 'Range', '-');
           setText(prefix + 'Rows', '-');
           return;
         }
+
         setText(prefix + 'Sheet', selection.sheetName);
         setText(prefix + 'Range', selection.a1Notation);
         setText(
@@ -273,26 +548,32 @@
             ' rows)'
         );
       }
+
       function refreshSelectionForView(workflow) {
         setMessage(
           workflow + 'Message',
           'Refreshing selection...'
         );
+
         google.script.run
           .withSuccessHandler(function(selection) {
             if (!selection || !selection.success) {
               selectionByWorkflow[workflow] = null;
               renderSelection(workflow, null);
+
               setMessage(
                 workflow + 'Message',
                 selection && selection.message
                   ? selection.message
                   : 'No selected range.'
               );
+
               return;
             }
+
             selectionByWorkflow[workflow] = selection;
             renderSelection(workflow, selection);
+
             setMessage(
               workflow + 'Message',
               'Selection snapshot ready.'
@@ -301,6 +582,7 @@
           .withFailureHandler(function(err) {
             selectionByWorkflow[workflow] = null;
             renderSelection(workflow, null);
+
             setMessage(
               workflow + 'Message',
               err && err.message
@@ -310,76 +592,304 @@
           })
           .GET_VERRACT_ACTIVE_SELECTION();
       }
+
       function attachSelection(config, workflow) {
-        var selection = selectionByWorkflow[workflow];
+        var selection =
+          selectionByWorkflow[workflow];
+
         if (!selection) {
           throw new Error(
             'No selection snapshot. Select a row range in the sheet, then click Refresh Selection.'
           );
         }
-        config.spreadsheetId = selection.spreadsheetId;
-        config.sheetName = selection.sheetName;
-        config.startRow = selection.startRow;
-        config.endRow = selection.endRow;
-        config.a1Notation = selection.a1Notation;
+
+        config.spreadsheetId =
+          selection.spreadsheetId;
+        config.sheetName =
+          selection.sheetName;
+        config.startRow =
+          selection.startRow;
+        config.endRow =
+          selection.endRow;
+        config.a1Notation =
+          selection.a1Notation;
+
         return config;
       }
+
+      function renderOutputMappingTable(
+        workflow,
+        fields,
+        defaultColumns
+      ) {
+        var table =
+          byId(
+            workflow +
+              'OutputMappingTable'
+          );
+
+        var html =
+          '<tr>' +
+          '<th></th>' +
+          '<th>Output</th>' +
+          '<th>Column</th>' +
+          '</tr>';
+
+        for (var i = 0; i < fields.length; i++) {
+          var field = fields[i];
+          var checked =
+            savedOutputMapping[workflow][field]
+              ? ' checked'
+              : '';
+          var column =
+            savedOutputMapping[workflow][field] ||
+            defaultColumns[field] ||
+            '';
+
+          html +=
+            '<tr>' +
+            '<td class="check-cell">' +
+            '<input type="checkbox" data-workflow="' +
+            workflow +
+            '" data-field="' +
+            field +
+            '"' +
+            checked +
+            '>' +
+            '</td>' +
+            '<td class="field-cell">' +
+            field +
+            '</td>' +
+            '<td class="column-cell">' +
+            '<input class="output-column" data-workflow="' +
+            workflow +
+            '" data-field="' +
+            field +
+            '" value="' +
+            column +
+            '">' +
+            '</td>' +
+            '</tr>';
+        }
+
+        table.innerHTML = html;
+      }
+
+      function loadOutputMappingSettings() {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (!result || !result.success) {
+              return;
+            }
+
+            savedOutputMapping.verify =
+              result.verify || {};
+            savedOutputMapping.resolve =
+              result.resolve || {};
+
+            renderOutputMappingTable(
+              'verify',
+              VERIFY_OUTPUT_FIELDS,
+              DEFAULT_VERIFY_COLUMNS
+            );
+
+            renderOutputMappingTable(
+              'resolve',
+              RESOLVE_OUTPUT_FIELDS,
+              DEFAULT_RESOLVE_COLUMNS
+            );
+          })
+          .withFailureHandler(function() {
+            renderOutputMappingTable(
+              'verify',
+              VERIFY_OUTPUT_FIELDS,
+              DEFAULT_VERIFY_COLUMNS
+            );
+
+            renderOutputMappingTable(
+              'resolve',
+              RESOLVE_OUTPUT_FIELDS,
+              DEFAULT_RESOLVE_COLUMNS
+            );
+          })
+          .GET_VERRACT_OUTPUT_MAPPING_SETTINGS();
+      }
+
+      function setAllOutputChecks(workflow, checked) {
+        var boxes =
+          document.querySelectorAll(
+            'input[type="checkbox"][data-workflow="' +
+              workflow +
+              '"]'
+          );
+
+        for (var i = 0; i < boxes.length; i++) {
+          boxes[i].checked = checked;
+        }
+      }
+
+      function readOutputMapping(workflow) {
+        var boxes =
+          document.querySelectorAll(
+            'input[type="checkbox"][data-workflow="' +
+              workflow +
+              '"]'
+          );
+
+        var mapping = {};
+        var selectedCount = 0;
+        var seenColumns = {};
+
+        for (var i = 0; i < boxes.length; i++) {
+          var checkbox = boxes[i];
+          var field =
+            checkbox.getAttribute('data-field');
+
+          if (!checkbox.checked) {
+            continue;
+          }
+
+          selectedCount++;
+
+          var columnInput =
+            document.querySelector(
+              'input.output-column[data-workflow="' +
+                workflow +
+                '"][data-field="' +
+                field +
+                '"]'
+            );
+
+          var columnValue =
+            columnInput.value
+              .trim()
+              .toUpperCase();
+
+          if (!columnValue) {
+            throw new Error(
+              'Output column is required for ' +
+                field +
+                '.'
+            );
+          }
+
+          if (seenColumns[columnValue]) {
+            throw new Error(
+              'Duplicate output column: ' +
+                columnValue
+            );
+          }
+
+          seenColumns[columnValue] = true;
+          mapping[field] = columnValue;
+        }
+
+        if (selectedCount === 0) {
+          throw new Error(
+            'At least one output field must be selected.'
+          );
+        }
+
+        return mapping;
+      }
+
       function buildVerifyConfig() {
         return attachSelection(
           {
-            pathColumns: valueOf('verifyPathColumns'),
-            fileColumn: valueOf('verifyFileColumn'),
-            extensionColumn: valueOf('verifyExtensionColumn'),
-            rootIdColumn: valueOf('verifyRootIdColumn'),
-            verifyOutputColumn: valueOf('verifyOutputColumn'),
-            batchSize: valueOf('verifyBatchSize'),
-            triggerGapMinutes: valueOf('verifyTriggerGap')
+            pathColumns:
+              valueOf('verifyPathColumns'),
+            fileColumn:
+              valueOf('verifyFileColumn'),
+            extensionColumn:
+              valueOf('verifyExtensionColumn'),
+            rootIdColumn:
+              valueOf('verifyRootIdColumn'),
+            verifyOutputColumn:
+              valueOf('verifyOutputColumn'),
+            outputMapping:
+              readOutputMapping('verify'),
+            batchSize:
+              valueOf('verifyBatchSize'),
+            triggerGapMinutes:
+              valueOf('verifyTriggerGap')
           },
           'verify'
         );
       }
+
       function buildResolveConfig() {
         return attachSelection(
           {
-            pathColumns: valueOf('resolvePathColumns'),
-            fileColumn: valueOf('resolveFileColumn'),
-            extensionColumn: valueOf('resolveExtensionColumn'),
-            rootIdColumn: valueOf('resolveRootIdColumn'),
-            verifyOutputColumn: valueOf('resolveVerifyOutputColumn'),
-            resolveOutputColumn: valueOf('resolveOutputColumn'),
-            batchSize: valueOf('resolveBatchSize'),
-            triggerGapMinutes: valueOf('resolveTriggerGap')
+            pathColumns:
+              valueOf('resolvePathColumns'),
+            fileColumn:
+              valueOf('resolveFileColumn'),
+            extensionColumn:
+              valueOf('resolveExtensionColumn'),
+            rootIdColumn:
+              valueOf('resolveRootIdColumn'),
+            verifyOutputColumn:
+              valueOf(
+                'resolveVerifyOutputColumn'
+              ),
+            resolveOutputColumn:
+              valueOf('resolveOutputColumn'),
+            outputMapping:
+              readOutputMapping('resolve'),
+            batchSize:
+              valueOf('resolveBatchSize'),
+            triggerGapMinutes:
+              valueOf('resolveTriggerGap')
           },
           'resolve'
         );
       }
+
       function setBusy(isBusy) {
-        byId('runVerifyButton').disabled = isBusy;
-        byId('runResolveButton').disabled = isBusy;
+        byId('runVerifyButton').disabled =
+          isBusy;
+        byId('runResolveButton').disabled =
+          isBusy;
       }
+
       function runVerify() {
         var config;
+
         try {
           config = buildVerifyConfig();
         } catch (err) {
-          setMessage('verifyMessage', err.message);
+          setMessage(
+            'verifyMessage',
+            err.message
+          );
           return;
         }
+
         setBusy(true);
-        setMessage('verifyMessage', 'Starting Verify...');
+        setMessage(
+          'verifyMessage',
+          'Starting Verify...'
+        );
+
         google.script.run
           .withSuccessHandler(function(result) {
             setBusy(false);
+
+            savedOutputMapping.verify =
+              config.outputMapping;
+
             setMessage(
               'verifyMessage',
               result && result.message
                 ? result.message
-                : 'Verify started.'
+                : 'Verify automation started.'
             );
+
             refreshStatus();
           })
           .withFailureHandler(function(err) {
             setBusy(false);
+
             setMessage(
               'verifyMessage',
               err && err.message
@@ -389,29 +899,45 @@
           })
           .START_VERIFY_FROM_SIDEBAR(config);
       }
+
       function runResolve() {
         var config;
+
         try {
           config = buildResolveConfig();
         } catch (err) {
-          setMessage('resolveMessage', err.message);
+          setMessage(
+            'resolveMessage',
+            err.message
+          );
           return;
         }
+
         setBusy(true);
-        setMessage('resolveMessage', 'Starting Resolve...');
+        setMessage(
+          'resolveMessage',
+          'Starting Resolve...'
+        );
+
         google.script.run
           .withSuccessHandler(function(result) {
             setBusy(false);
+
+            savedOutputMapping.resolve =
+              config.outputMapping;
+
             setMessage(
               'resolveMessage',
               result && result.message
                 ? result.message
-                : 'Resolve started.'
+                : 'Resolve automation started.'
             );
+
             refreshStatus();
           })
           .withFailureHandler(function(err) {
             setBusy(false);
+
             setMessage(
               'resolveMessage',
               err && err.message
@@ -421,22 +947,30 @@
           })
           .START_RESOLVE_FROM_SIDEBAR(config);
       }
+
       function refreshStatus() {
         google.script.run
           .withSuccessHandler(function(status) {
             var rowText = '-';
-            if (status.currentRow || status.endRow) {
+
+            if (
+              status.currentRow ||
+              status.endRow
+            ) {
               rowText =
                 (status.currentRow || '-') +
                 ' / ' +
                 (status.endRow || '-');
             }
+
             setText('homeStatus', status.status);
             setText('homeMode', status.mode);
             setText('homeSheet', status.sheetName);
             setText('homeRows', rowText);
+
             setText('verifyStatus', status.status);
             setText('verifyMode', status.mode);
+
             setText('resolveStatus', status.status);
             setText('resolveMode', status.mode);
           })
@@ -450,8 +984,13 @@
           })
           .GET_VERRACT_ENGINE_STATUS();
       }
+
       function stopVerract() {
-        setMessage('homeMessage', 'Stopping verract...');
+        setMessage(
+          'homeMessage',
+          'Stopping verract...'
+        );
+
         google.script.run
           .withSuccessHandler(function(result) {
             setMessage(
@@ -460,6 +999,7 @@
                 ? result.message
                 : 'Stopped.'
             );
+
             refreshStatus();
           })
           .withFailureHandler(function(err) {
@@ -472,8 +1012,13 @@
           })
           .STOP_VERRACT_FROM_SIDEBAR();
       }
+
       function runDiagnostics() {
-        setMessage('homeMessage', 'Running diagnostics...');
+        setMessage(
+          'homeMessage',
+          'Running diagnostics...'
+        );
+
         google.script.run
           .withSuccessHandler(function(result) {
             setMessage(
@@ -482,6 +1027,7 @@
                 ? result.message
                 : 'Diagnostics completed.'
             );
+
             refreshStatus();
           })
           .withFailureHandler(function(err) {
@@ -494,46 +1040,109 @@
           })
           .RUN_DIAGNOSTICS_FROM_SIDEBAR();
       }
+
       function bindEvents() {
         byId('openVerifyButton')
           .addEventListener('click', function() {
             openWorkflow('verify');
           });
+
         byId('openResolveButton')
           .addEventListener('click', function() {
             openWorkflow('resolve');
           });
+
         byId('backFromVerifyButton')
           .addEventListener('click', function() {
             showView('homeView');
           });
+
         byId('backFromResolveButton')
           .addEventListener('click', function() {
             showView('homeView');
           });
+
         byId('verifyRefreshSelectionBtn')
           .addEventListener('click', function() {
             refreshSelectionForView('verify');
           });
+
         byId('resolveRefreshSelectionBtn')
           .addEventListener('click', function() {
             refreshSelectionForView('resolve');
           });
+
+        byId('verifySelectAllOutputs')
+          .addEventListener('click', function() {
+            setAllOutputChecks('verify', true);
+          });
+
+        byId('verifyClearAllOutputs')
+          .addEventListener('click', function() {
+            setAllOutputChecks('verify', false);
+          });
+
+        byId('resolveSelectAllOutputs')
+          .addEventListener('click', function() {
+            setAllOutputChecks('resolve', true);
+          });
+
+        byId('resolveClearAllOutputs')
+          .addEventListener('click', function() {
+            setAllOutputChecks('resolve', false);
+          });
+
         byId('refreshStatusButton')
-          .addEventListener('click', refreshStatus);
+          .addEventListener(
+            'click',
+            refreshStatus
+          );
+
         byId('diagnosticsButton')
-          .addEventListener('click', runDiagnostics);
+          .addEventListener(
+            'click',
+            runDiagnostics
+          );
+
         byId('stopButton')
-          .addEventListener('click', stopVerract);
+          .addEventListener(
+            'click',
+            stopVerract
+          );
+
         byId('runVerifyButton')
-          .addEventListener('click', runVerify);
+          .addEventListener(
+            'click',
+            runVerify
+          );
+
         byId('runResolveButton')
-          .addEventListener('click', runResolve);
+          .addEventListener(
+            'click',
+            runResolve
+          );
       }
-      document.addEventListener('DOMContentLoaded', function() {
-        bindEvents();
-        refreshStatus();
-      });
+
+      document.addEventListener(
+        'DOMContentLoaded',
+        function() {
+          renderOutputMappingTable(
+            'verify',
+            VERIFY_OUTPUT_FIELDS,
+            DEFAULT_VERIFY_COLUMNS
+          );
+
+          renderOutputMappingTable(
+            'resolve',
+            RESOLVE_OUTPUT_FIELDS,
+            DEFAULT_RESOLVE_COLUMNS
+          );
+
+          bindEvents();
+          refreshStatus();
+          loadOutputMappingSettings();
+        }
+      );
     </script>
   </body>
 </html>

@@ -1,6 +1,63 @@
 # Changelog
 
 <details>
+<summary>v0.3.3 - Custom Output Mapping</summary>
+
+### Added
+
+* Custom Output Mapping for Verify
+
+  * Per-field output selection
+  * Per-field output column assignment
+  * Optional output fields
+
+* Custom Output Mapping for Resolve
+
+  * Per-field output selection
+  * Per-field output column assignment
+  * Optional output fields
+
+* Output Mapping Persistence
+
+  * Remembers last-used Verify output settings
+  * Remembers last-used Resolve output settings
+
+* Output Mapping Utilities
+
+  * Select All
+  * Clear All
+
+### Changed
+
+* Verify output writer now supports non-contiguous output columns
+
+* Resolve output writer now supports non-contiguous output columns
+
+* Output fields can be enabled or disabled independently
+
+* Output columns are no longer restricted to a fixed output block
+
+### Validation
+
+* Prevents running Verify with no selected outputs
+
+* Prevents running Resolve with no selected outputs
+
+* Prevents duplicate output column assignments
+
+* Requires output columns for selected output fields
+
+### Notes
+
+* Verify and Resolve output mappings are independent
+
+* Existing workflows remain supported
+
+* Shared Object Output architecture is being evaluated for future releases
+
+</details>
+
+<details>
 <summary>v0.3.2 - HTML Control Panel & Verification Refactor</summary>
 
 ### Added

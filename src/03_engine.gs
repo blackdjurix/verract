@@ -3,7 +3,9 @@ function CREATE_TIME_TRIGGER_MULTI() {
   if (!config) {
     return;
   }
+
   var result = startVerifyAutomation_(config);
+
   SpreadsheetApp
     .getActiveSpreadsheet()
     .toast(
@@ -18,6 +20,7 @@ function collectVerifyConfigFromPrompts_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getActiveSheet();
   var range = sheet.getActiveRange();
+
   if (!range) {
     ui.alert(
       'No Selection',
@@ -26,9 +29,11 @@ function collectVerifyConfigFromPrompts_() {
     );
     return null;
   }
+
   var startRow = range.getRow();
   var numRows = range.getNumRows();
   var endRow = startRow + numRows - 1;
+
   var pathColumnResponse = ui.prompt(
     'Path Column(s)',
     'Masukkan path column(s).\n\n' +
@@ -39,16 +44,19 @@ function collectVerifyConfigFromPrompts_() {
       'Kolom path boleh berisi folder path atau full path\\file.ext.',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     pathColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var pathColumnParse =
     parseColumnSelection_(
       pathColumnResponse.getResponseText()
     );
+
   if (!pathColumnParse.isValid) {
     ui.alert(
       'Invalid Path Column(s)',
@@ -57,7 +65,9 @@ function collectVerifyConfigFromPrompts_() {
     );
     return null;
   }
+
   var pathColumns = pathColumnParse.columns;
+
   if (
     !confirmLargePathColumnSelection_(
       pathColumns.length
@@ -65,6 +75,7 @@ function collectVerifyConfigFromPrompts_() {
   ) {
     return null;
   }
+
   var fileColumnResponse = ui.prompt(
     'File Column',
     'Masukkan file column.\n\n' +
@@ -73,23 +84,28 @@ function collectVerifyConfigFromPrompts_() {
       'Kosongkan jika path column sudah berisi full path\\file.ext.',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     fileColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var fileColumnText =
     fileColumnResponse
       .getResponseText()
       .toString()
       .trim();
+
   var fileColumn = 0;
+
   if (fileColumnText) {
     var fileColumnValidation =
       validateFileColumn_(
         fileColumnText
       );
+
     if (!fileColumnValidation.isValid) {
       ui.alert(
         'Invalid File Column',
@@ -98,9 +114,11 @@ function collectVerifyConfigFromPrompts_() {
       );
       return null;
     }
+
     fileColumn =
       fileColumnValidation.column;
   }
+
   var extensionColumnResponse = ui.prompt(
     'Extension Column',
     'Masukkan extension column jika extension dipisah.\n\n' +
@@ -108,23 +126,28 @@ function collectVerifyConfigFromPrompts_() {
       'Kosongkan jika filename sudah berisi extension, misalnya file.ai.',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     extensionColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var extensionColumnText =
     extensionColumnResponse
       .getResponseText()
       .toString()
       .trim();
+
   var extensionColumn = 0;
+
   if (extensionColumnText) {
     var extensionColumnValidation =
       validateOptionalExtensionColumn_(
         extensionColumnText
       );
+
     if (
       !extensionColumnValidation.isValid
     ) {
@@ -135,25 +158,30 @@ function collectVerifyConfigFromPrompts_() {
       );
       return null;
     }
+
     extensionColumn =
       extensionColumnValidation.column;
   }
+
   var rootIdColumnResponse = ui.prompt(
     'RootID Column',
     'Masukkan RootID column.\n\n' +
       'Contoh: C',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     rootIdColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var rootIdColumnValidation =
     validateFileColumn_(
       rootIdColumnResponse.getResponseText()
     );
+
   if (!rootIdColumnValidation.isValid) {
     ui.alert(
       'Invalid RootID Column',
@@ -162,8 +190,10 @@ function collectVerifyConfigFromPrompts_() {
     );
     return null;
   }
+
   var rootIdColumn =
     rootIdColumnValidation.column;
+
   var inputValidation =
     validateInputColumns_(
       pathColumns,
@@ -171,6 +201,7 @@ function collectVerifyConfigFromPrompts_() {
       rootIdColumn,
       extensionColumn
     );
+
   if (!inputValidation.isValid) {
     ui.alert(
       'Invalid Input Columns',
@@ -179,6 +210,7 @@ function collectVerifyConfigFromPrompts_() {
     );
     return null;
   }
+
   var targetColumnResponse = ui.prompt(
     'Output Column',
     'Masukkan kolom awal output.\n\n' +
@@ -188,16 +220,19 @@ function collectVerifyConfigFromPrompts_() {
       ' kolom.',
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     targetColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var targetColumnValidation =
     validateFileColumn_(
       targetColumnResponse.getResponseText()
     );
+
   if (!targetColumnValidation.isValid) {
     ui.alert(
       'Invalid Output Column',
@@ -206,8 +241,10 @@ function collectVerifyConfigFromPrompts_() {
     );
     return null;
   }
+
   var targetColumn =
     targetColumnValidation.column;
+
   if (
     !confirmOutputDoesNotOverlapInputs_(
       pathColumns,
@@ -220,6 +257,7 @@ function collectVerifyConfigFromPrompts_() {
   ) {
     return null;
   }
+
   if (
     !confirmOutputWithinSheetBoundary_(
       sheet,
@@ -229,6 +267,7 @@ function collectVerifyConfigFromPrompts_() {
   ) {
     return null;
   }
+
   if (
     !confirmNonBlankMainOutput_(
       sheet,
@@ -239,6 +278,7 @@ function collectVerifyConfigFromPrompts_() {
   ) {
     return null;
   }
+
   var batchSizeResponse = ui.prompt(
     'Batch Size',
     'Masukkan batch size.\n\n' +
@@ -252,21 +292,25 @@ function collectVerifyConfigFromPrompts_() {
       MAX_BATCH_SIZE,
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     batchSizeResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var batchSizeText =
     batchSizeResponse
       .getResponseText()
       .toString()
       .trim();
+
   var batchSize =
     batchSizeText
       ? parseInt(batchSizeText, 10)
       : DEFAULT_BATCH_SIZE;
+
   if (
     isNaN(batchSize) ||
     batchSize < MIN_BATCH_SIZE ||
@@ -282,11 +326,13 @@ function collectVerifyConfigFromPrompts_() {
     );
     return null;
   }
+
   var workloadValidation =
     validateVerifyWorkload_(
       batchSize,
       pathColumns.length
     );
+
   if (!workloadValidation.isValid) {
     ui.alert(
       'Workload Too Large',
@@ -295,6 +341,7 @@ function collectVerifyConfigFromPrompts_() {
     );
     return null;
   }
+
   var intervalResponse = ui.prompt(
     'Trigger Interval',
     'Masukkan interval trigger dalam menit.\n\n' +
@@ -308,21 +355,25 @@ function collectVerifyConfigFromPrompts_() {
       MAX_TRIGGER_GAP_MINUTES,
     ui.ButtonSet.OK_CANCEL
   );
+
   if (
     intervalResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
     return null;
   }
+
   var triggerGapText =
     intervalResponse
       .getResponseText()
       .toString()
       .trim();
+
   var triggerGap =
     triggerGapText
       ? parseInt(triggerGapText, 10)
       : DEFAULT_TRIGGER_GAP_MINUTES;
+
   if (
     isNaN(triggerGap) ||
     triggerGap < MIN_TRIGGER_GAP_MINUTES ||
@@ -338,6 +389,7 @@ function collectVerifyConfigFromPrompts_() {
     );
     return null;
   }
+
   return {
     startRow: startRow,
     endRow: endRow,
@@ -356,9 +408,12 @@ function collectVerifyConfigFromPrompts_() {
 function startVerifyAutomation_(config) {
   var normalizedConfig =
     normalizeVerifyAutomationConfig_(config);
+
   var props =
     PropertiesService.getScriptProperties();
+
   checkEngineHeartbeat_();
+
   if (
     props.getProperty(ENGINE_STATE_KEY) ===
     'TRUE'
@@ -367,11 +422,15 @@ function startVerifyAutomation_(config) {
       'Engine masih aktif. Jalankan Stop & Reset dulu.'
     );
   }
+
   deleteExistingTriggers_();
+
   props.deleteProperty('AUTO_LAST_ERROR');
   props.deleteProperty('AUTO_BACKOFF_UNTIL');
+
   var timestampNow =
     Date.now().toString();
+
   props.setProperties({
     AUTO_CURRENT_ROW:
       normalizedConfig.startRow.toString(),
@@ -389,6 +448,10 @@ function startVerifyAutomation_(config) {
       normalizedConfig.rootIdColumn.toString(),
     AUTO_TARGET_COL:
       normalizedConfig.verifyOutputColumn.toString(),
+    AUTO_OUTPUT_MAPPING:
+      serializeOutputMapping_(
+        normalizedConfig.outputMapping
+      ),
     AUTO_SPREADSHEET_ID:
       normalizedConfig.spreadsheetId,
     AUTO_SHEET_NAME:
@@ -400,10 +463,12 @@ function startVerifyAutomation_(config) {
     AUTO_LAST_SUCCESS_TS:
       timestampNow
   });
+
   props.setProperty(
     ENGINE_STATE_KEY,
     'TRUE'
   );
+
   ScriptApp
     .newTrigger(
       'TRIGGER_BATCH_AUDIT_MULTI'
@@ -413,7 +478,9 @@ function startVerifyAutomation_(config) {
       normalizedConfig.triggerGapMinutes
     )
     .create();
+
   TRIGGER_BATCH_AUDIT_MULTI();
+
   return {
     success: true,
     mode: 'VERIFY',
@@ -422,7 +489,7 @@ function startVerifyAutomation_(config) {
     batchSize: normalizedConfig.batchSize,
     triggerGapMinutes:
       normalizedConfig.triggerGapMinutes,
-    message: 'File verification started.'
+    message: 'Verify automation started.'
   };
 }
 
@@ -432,16 +499,22 @@ function normalizeVerifyAutomationConfig_(config) {
       'Verify config is required.'
     );
   }
+
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getActiveSheet();
+
   var spreadsheetId =
     config.spreadsheetId || ss.getId();
+
   var sheetName =
     config.sheetName || sheet.getName();
+
   var startRow =
     parseInt(config.startRow, 10);
+
   var endRow =
     parseInt(config.endRow, 10);
+
   if (
     isNaN(startRow) ||
     isNaN(endRow) ||
@@ -452,32 +525,39 @@ function normalizeVerifyAutomationConfig_(config) {
       'Verify row range tidak valid.'
     );
   }
+
   var pathColumns =
     normalizeVerifyPathColumns_(
       config.pathColumns
     );
+
   if (!pathColumns.length) {
     throw new Error(
       'Path column tidak valid.'
     );
   }
+
   var fileColumn =
     normalizeOptionalColumn_(
       config.fileColumn
     );
+
   var extensionColumn =
     normalizeOptionalColumn_(
       config.extensionColumn
     );
+
   var rootIdColumn =
     normalizeRequiredColumn_(
       config.rootIdColumn
     );
+
   var verifyOutputColumn =
     normalizeRequiredColumn_(
       config.verifyOutputColumn ||
         config.targetColumn
     );
+
   var inputValidation =
     validateInputColumns_(
       pathColumns,
@@ -485,17 +565,20 @@ function normalizeVerifyAutomationConfig_(config) {
       rootIdColumn,
       extensionColumn
     );
+
   if (!inputValidation.isValid) {
     throw new Error(
       inputValidation.error
     );
   }
+
   var batchSize =
     config.batchSize === '' ||
     config.batchSize === null ||
     config.batchSize === undefined
       ? DEFAULT_BATCH_SIZE
       : parseInt(config.batchSize, 10);
+
   if (
     isNaN(batchSize) ||
     batchSize < MIN_BATCH_SIZE ||
@@ -505,22 +588,26 @@ function normalizeVerifyAutomationConfig_(config) {
       'Batch size tidak valid.'
     );
   }
+
   var workloadValidation =
     validateVerifyWorkload_(
       batchSize,
       pathColumns.length
     );
+
   if (!workloadValidation.isValid) {
     throw new Error(
       workloadValidation.error
     );
   }
+
   var triggerGapMinutes =
     config.triggerGapMinutes === '' ||
     config.triggerGapMinutes === null ||
     config.triggerGapMinutes === undefined
       ? DEFAULT_TRIGGER_GAP_MINUTES
       : parseInt(config.triggerGapMinutes, 10);
+
   if (
     isNaN(triggerGapMinutes) ||
     triggerGapMinutes < MIN_TRIGGER_GAP_MINUTES ||
@@ -530,6 +617,14 @@ function normalizeVerifyAutomationConfig_(config) {
       'Trigger interval tidak valid.'
     );
   }
+
+  var outputMapping =
+    normalizeOutputMapping_(
+      config.outputMapping,
+      VERIFY_OUTPUT_FIELDS,
+      verifyOutputColumn
+    );
+
   return {
     startRow: startRow,
     endRow: endRow,
@@ -538,6 +633,7 @@ function normalizeVerifyAutomationConfig_(config) {
     extensionColumn: extensionColumn,
     rootIdColumn: rootIdColumn,
     verifyOutputColumn: verifyOutputColumn,
+    outputMapping: outputMapping,
     batchSize: batchSize,
     triggerGapMinutes: triggerGapMinutes,
     spreadsheetId: spreadsheetId,
@@ -555,11 +651,14 @@ function normalizeVerifyPathColumns_(value) {
         return !isNaN(column) && column > 0;
       });
   }
+
   var parsed =
     parseColumnSelection_(value);
+
   if (!parsed.isValid) {
     throw new Error(parsed.error);
   }
+
   return parsed.columns;
 }
 
@@ -570,6 +669,7 @@ function normalizeRequiredColumn_(value) {
   ) {
     return value;
   }
+
   if (
     value === null ||
     value === undefined ||
@@ -579,11 +679,14 @@ function normalizeRequiredColumn_(value) {
       'Required column tidak boleh kosong.'
     );
   }
+
   var validation =
     validateFileColumn_(value);
+
   if (!validation.isValid) {
     throw new Error(validation.error);
   }
+
   return validation.column;
 }
 
@@ -597,19 +700,24 @@ function normalizeOptionalColumn_(value) {
   ) {
     return 0;
   }
+
   if (
     typeof value === 'number' &&
     value > 0
   ) {
     return value;
   }
+
   var validation =
     validateFileColumn_(value);
+
   if (!validation.isValid) {
     throw new Error(validation.error);
   }
+
   return validation.column;
 }
+
 
 function TRIGGER_BATCH_AUDIT_MULTI() {
   var props =
@@ -691,6 +799,14 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
       ),
       10
     );
+    var outputMapping =
+      parseStoredOutputMapping_(
+        props.getProperty(
+          'AUTO_OUTPUT_MAPPING'
+        ),
+        VERIFY_OUTPUT_FIELDS,
+        targetColumn
+      );
     var batchSize = parseInt(
       props.getProperty(
         'DYNAMIC_BATCH_SIZE'
@@ -773,14 +889,14 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
         1
       )
       .getValues();
-    var existingOutputValues = sheet
-      .getRange(
+    var existingOutputValues =
+      readMappedOutputRows_(
+        sheet,
         currentRow,
-        targetColumn,
         numRows,
-        OUTPUT_WIDTH
-      )
-      .getValues();
+        outputMapping,
+        VERIFY_OUTPUT_FIELDS
+      );
     var outputValues = [];
     var scriptCache =
       CacheService.getScriptCache();
@@ -790,7 +906,10 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
       rowOffset++
     ) {
       var existingExistsValue =
-        existingOutputValues[rowOffset][0];
+        getMappedValue_(
+          existingOutputValues[rowOffset],
+          'Exists'
+        );
       var existingExistsText =
         existingExistsValue === null ||
         existingExistsValue === undefined
@@ -842,29 +961,33 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
           extensionValue: extensionValue
         });
       if (!rootId) {
-        outputValues.push([
-          false,
-          '',
-          0,
-          '',
-          '',
-          '',
-          '',
-          'Missing RootID.'
-        ]);
+        outputValues.push(
+          buildVerifyOutputObject_(
+            false,
+            '',
+            0,
+            '',
+            '',
+            '',
+            '',
+            'Missing RootID.'
+          )
+        );
         continue;
       }
       if (!fileReference.isValid) {
-        outputValues.push([
-          false,
-          '',
-          fileReference.checkedPathCount || 0,
-          '',
-          '',
-          '',
-          '',
-          fileReference.error
-        ]);
+        outputValues.push(
+          buildVerifyOutputObject_(
+            false,
+            '',
+            fileReference.checkedPathCount || 0,
+            '',
+            '',
+            '',
+            '',
+            fileReference.error
+          )
+        );
         continue;
       }
       var result =
@@ -874,25 +997,19 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
           fileReference.filename,
           scriptCache
         );
-      outputValues.push([
-        result.exists,
-        result.fileType,
-        result.checkedPathCount,
-        result.matchedPathColumn,
-        result.fileId,
-        result.parentId,
-        result.verifiedFilePath,
-        result.error
-      ]);
+      outputValues.push(
+        convertVerifyResultToObject_(
+          result
+        )
+      );
     }
-    sheet
-      .getRange(
-        currentRow,
-        targetColumn,
-        outputValues.length,
-        OUTPUT_WIDTH
-      )
-      .setValues(outputValues);
+    writeMappedOutputRows_(
+      sheet,
+      currentRow,
+      outputValues,
+      outputMapping,
+      VERIFY_OUTPUT_FIELDS
+    );
     var nextRow = lastRow + 1;
     props.setProperty(
       'AUTO_CURRENT_ROW',

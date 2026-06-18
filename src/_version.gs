@@ -1,19 +1,18 @@
 var VERRACT_VERSION_INFO = {
   name: 'verract',
-  version: '0.3.2',
+  version: '0.3.3',
   build: 'Design Files Management Build',
   author: 'blackdjurix',
-  feature: 'HTML Control Panel & Verification Refactor',
+  feature: 'Custom Output Mapping',
   highlights: [
-    'Introduces an HTML sidebar control panel',
-    'Adds Verify and Resolve workflow views',
-    'Supports selected-range snapshots from the sidebar',
-    'Adds Refresh Selection support for Verify and Resolve',
-    'Runs Verify and Resolve from sidebar configuration forms',
-    'Refactors Verify output into a path-aware result model',
-    'Introduces Type and PathID semantics',
-    'Improves path-found but file-missing reporting',
-    'Keeps legacy prompt workflows available during transition'
+    'Adds custom output mapping for Verify',
+    'Adds custom output mapping for Resolve',
+    'Supports per-field output selection',
+    'Supports non-contiguous output columns',
+    'Remembers last-used output mappings',
+    'Adds Select All and Clear All controls',
+    'Prevents duplicate output column assignments',
+    'Validates required output columns before execution'
   ]
 };
 
