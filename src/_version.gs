@@ -1,23 +1,24 @@
 var VERRACT_VERSION_INFO = {
   name: 'verract',
-  version: '0.3.1-beta',
+  version: '0.3.2',
   build: 'Design Files Management Build',
   author: 'blackdjurix',
-  feature: 'Verify Recheck & Resolve Hold',
+  feature: 'HTML Control Panel & Verification Refactor',
   highlights: [
-    'Supports rechecking failed Verify rows',
-    'Skips already verified TRUE rows',
-    'Allows FALSE Verify rows to be overwritten on rerun',
-    'Holds Resolve output when Verify result is still blank',
-    'Prevents Resolve from marking unverified rows as skipped',
-    'Improves Verify and Resolve rerun workflow',
-    'Keeps Resolve candidate discovery read-only'
+    'Introduces an HTML sidebar control panel',
+    'Adds Verify and Resolve workflow views',
+    'Supports selected-range snapshots from the sidebar',
+    'Adds Refresh Selection support for Verify and Resolve',
+    'Runs Verify and Resolve from sidebar configuration forms',
+    'Refactors Verify output into a path-aware result model',
+    'Introduces Type and PathID semantics',
+    'Improves path-found but file-missing reporting',
+    'Keeps legacy prompt workflows available during transition'
   ]
 };
 
 function SHOW_VERSION_INFO() {
   var info = VERRACT_VERSION_INFO;
-
   var message =
     info.name +
     ' v' +

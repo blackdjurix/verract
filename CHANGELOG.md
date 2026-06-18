@@ -1,6 +1,75 @@
 # Changelog
 
 <details>
+<summary>v0.3.2 - HTML Control Panel & Verification Refactor</summary>
+
+### Added
+
+* HTML Control Panel
+  * Sidebar-based UI
+  * Home view
+  * Verify view
+  * Resolve view
+  * Engine status panel
+  * Diagnostics access
+  * Stop & Reset access
+
+* Selection Snapshot Workflow
+  * Selected range capture
+  * Verify selection snapshot
+  * Resolve selection snapshot
+  * Refresh Selection support
+
+### Changed
+
+* Verification output model refactored
+
+  * Exists
+  * Type
+  * CheckedPathCount
+  * MatchedPathColumn
+  * FileID
+  * PathID
+  * VerifiedFilePath
+  * Error
+
+* Verification result states standardized
+
+  * FALSE + null
+    * Path not found
+  * FALSE + folder
+    * Path found
+    * File not found
+  * TRUE + file
+    * Path found
+    * File found
+
+* ParentID semantics replaced by PathID
+
+* Verify and Resolve configuration moved toward sidebar-based workflow
+
+### Fixed
+
+* Candidate path validation edge cases
+
+* Valid path detection when target file is missing
+
+* Incorrect FALSE results caused by filename mismatch on valid paths
+
+* Verification reporting consistency
+
+* Folder-only match handling
+
+### Notes
+
+* Legacy Verify Prompt remains available
+
+* Legacy Resolve Prompt remains available
+
+* HTML Control Panel is functional but status polling and UI refinements remain planned for future releases
+
+</details>
+<details>
 <summary>v0.3.1-beta - Verify & Resolve Workflow Refinement</summary>
 
 ### Added
