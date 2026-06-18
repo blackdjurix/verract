@@ -1,165 +1,319 @@
 function CREATE_RESOLVE_TRIGGER_MULTI() {
-  var lock = LockService.getScriptLock();
-  var lockReleased = false;
-  if (!lock.tryLock(2000)) {
-    SpreadsheetApp.getActiveSpreadsheet().toast(
-      'Server sedang sibuk.',
-      'LOCKED',
-      3
-    );
+  var config = collectResolveConfigFromPrompts_();
+  if (!config) {
     return;
   }
+  var result = startResolveAutomation_(config);
+  SpreadsheetApp
+    .getActiveSpreadsheet()
+    .toast(
+      result.message,
+      'RESOLVE STARTED',
+      5
+    );
+}
+
+function collectResolveConfigFromPrompts_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  var range = sheet.getActiveRange();
+  if (!range) {
+    SpreadsheetApp
+      .getUi()
+      .alert(
+        'Pilih range row yang mau di-Resolve dulu.'
+      );
+    return null;
+  }
+  var ui = SpreadsheetApp.getUi();
+  var pathPrompt = ui.prompt(
+    'Path Column(s)',
+    'Masukkan kolom path kandidat.\nContoh: D-F atau J',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (
+    pathPrompt.getSelectedButton() !==
+    ui.Button.OK
+  ) {
+    return null;
+  }
+  var pathText =
+    pathPrompt
+      .getResponseText()
+      .trim()
+      .toUpperCase();
+  var pathColumns =
+    parseResolveColumnSpec_(pathText);
+  if (pathColumns.length === 0) {
+    ui.alert('Path column tidak valid.');
+    return null;
+  }
+  var filePrompt = ui.prompt(
+    'File Column',
+    'Masukkan huruf kolom file.\nKosongkan jika tidak ada.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (
+    filePrompt.getSelectedButton() !==
+    ui.Button.OK
+  ) {
+    return null;
+  }
+  var fileText =
+    filePrompt
+      .getResponseText()
+      .trim()
+      .toUpperCase();
+  var fileColumn =
+    fileText
+      ? convertLetterToColumn(fileText)
+      : -1;
+  var extPrompt = ui.prompt(
+    'Extension Column',
+    'Masukkan huruf kolom extension.\nKosongkan jika tidak ada.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (
+    extPrompt.getSelectedButton() !==
+    ui.Button.OK
+  ) {
+    return null;
+  }
+  var extText =
+    extPrompt
+      .getResponseText()
+      .trim()
+      .toUpperCase();
+  var extColumn =
+    extText
+      ? convertLetterToColumn(extText)
+      : -1;
+  var rootPrompt = ui.prompt(
+    'RootID Column',
+    'Masukkan huruf kolom RootID.\nContoh: C',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (
+    rootPrompt.getSelectedButton() !==
+    ui.Button.OK
+  ) {
+    return null;
+  }
+  var rootText =
+    rootPrompt
+      .getResponseText()
+      .trim()
+      .toUpperCase();
+  if (!isValidColumnLetter_(rootText)) {
+    ui.alert('RootID column tidak valid.');
+    return null;
+  }
+  var verifyPrompt = ui.prompt(
+    'Verify Output Start Column',
+    'Masukkan huruf kolom awal output Verify.\nContoh: J / K\n\nUrutan Verify harus:\nExists | FileID | FileType | ParentID | VerifiedFilePath | MatchedPathColumn | CheckedPathCount | Error',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (
+    verifyPrompt.getSelectedButton() !==
+    ui.Button.OK
+  ) {
+    return null;
+  }
+  var verifyText =
+    verifyPrompt
+      .getResponseText()
+      .trim()
+      .toUpperCase();
+  if (!isValidColumnLetter_(verifyText)) {
+    ui.alert('Verify output column tidak valid.');
+    return null;
+  }
+  var targetPrompt = ui.prompt(
+    'Resolve Output Start Column',
+    'Masukkan huruf kolom awal output Resolve.\n\nOutput:\nResolveStatus | ResolvedID | ResolvedType | ResolvedPath | MatchCount | MatchMethod | Confidence | ResolveNote',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (
+    targetPrompt.getSelectedButton() !==
+    ui.Button.OK
+  ) {
+    return null;
+  }
+  var targetText =
+    targetPrompt
+      .getResponseText()
+      .trim()
+      .toUpperCase();
+  if (!isValidColumnLetter_(targetText)) {
+    ui.alert('Resolve output column tidak valid.');
+    return null;
+  }
+  var batchPrompt = ui.prompt(
+    'Resolve Batch Size',
+    'Masukkan jumlah row per batch.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (
+    batchPrompt.getSelectedButton() !==
+    ui.Button.OK
+  ) {
+    return null;
+  }
+  var batchSize =
+    parseInt(
+      batchPrompt.getResponseText(),
+      10
+    );
+  if (
+    isNaN(batchSize) ||
+    batchSize < RESOLVE_MIN_BATCH_SIZE
+  ) {
+    batchSize = RESOLVE_DEFAULT_BATCH_SIZE;
+  }
+  if (batchSize > RESOLVE_MAX_BATCH_SIZE) {
+    ui.alert(
+      'Batch terlalu besar. Maksimal: ' +
+        RESOLVE_MAX_BATCH_SIZE
+    );
+    return null;
+  }
+  var gapPrompt = ui.prompt(
+    'Interval Menit',
+    'Minimal 5 menit.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (
+    gapPrompt.getSelectedButton() !==
+    ui.Button.OK
+  ) {
+    return null;
+  }
+  var gap =
+    parseInt(
+      gapPrompt.getResponseText(),
+      10
+    );
+  if (
+    isNaN(gap) ||
+    gap < RESOLVE_MIN_TRIGGER_GAP_MINUTES
+  ) {
+    gap = RESOLVE_DEFAULT_TRIGGER_GAP_MINUTES;
+  }
+  if (gap > RESOLVE_MAX_TRIGGER_GAP_MINUTES) {
+    ui.alert(
+      'Interval terlalu besar. Maksimal: ' +
+        RESOLVE_MAX_TRIGGER_GAP_MINUTES +
+        ' menit.'
+    );
+    return null;
+  }
+  return {
+    startRow: range.getRow(),
+    endRow:
+      range.getRow() +
+      range.getNumRows() -
+      1,
+    pathColumns: pathColumns,
+    fileColumn: fileColumn,
+    extensionColumn: extColumn,
+    rootIdColumn:
+      convertLetterToColumn(rootText),
+    verifyOutputColumn:
+      convertLetterToColumn(verifyText),
+    resolveOutputColumn:
+      convertLetterToColumn(targetText),
+    batchSize: batchSize,
+    triggerGapMinutes: gap,
+    spreadsheetId: ss.getId(),
+    sheetName: sheet.getName()
+  };
+}
+
+function startResolveAutomation_(config) {
+  var lock =
+    LockService.getScriptLock();
+  var lockReleased = false;
+  if (!lock.tryLock(2000)) {
+    throw new Error(
+      'Server sedang sibuk.'
+    );
+  }
   try {
-    var props = PropertiesService.getScriptProperties();
+    var normalizedConfig =
+      normalizeResolveAutomationConfig_(
+        config
+      );
+    var props =
+      PropertiesService.getScriptProperties();
     checkEngineHeartbeat_();
-    if (props.getProperty(ENGINE_STATE_KEY) === 'TRUE') {
-      SpreadsheetApp.getActiveSpreadsheet().toast(
-        'Automation masih aktif.',
-        'LOCKED',
-        5
+    if (
+      props.getProperty(ENGINE_STATE_KEY) ===
+      'TRUE'
+    ) {
+      throw new Error(
+        'Automation masih aktif.'
       );
-      return;
-    }
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getActiveSheet();
-    var range = sheet.getActiveRange();
-    if (!range) {
-      SpreadsheetApp.getUi().alert('Pilih range row yang mau di-Resolve dulu.');
-      return;
-    }
-    var ui = SpreadsheetApp.getUi();
-    var pathPrompt = ui.prompt(
-      'Path Column(s)',
-      'Masukkan kolom path kandidat.\nContoh: D-F atau J',
-      ui.ButtonSet.OK_CANCEL
-    );
-    if (pathPrompt.getSelectedButton() !== ui.Button.OK) return;
-    var pathText = pathPrompt.getResponseText().trim().toUpperCase();
-    var pathColumns = parseResolveColumnSpec_(pathText);
-    if (pathColumns.length === 0) {
-      ui.alert('Path column tidak valid.');
-      return;
-    }
-    var filePrompt = ui.prompt(
-      'File Column',
-      'Masukkan huruf kolom file.\nKosongkan jika tidak ada.',
-      ui.ButtonSet.OK_CANCEL
-    );
-    if (filePrompt.getSelectedButton() !== ui.Button.OK) return;
-    var fileText = filePrompt.getResponseText().trim().toUpperCase();
-    var fileColumn = fileText ? convertLetterToColumn(fileText) : -1;
-    var extPrompt = ui.prompt(
-      'Extension Column',
-      'Masukkan huruf kolom extension.\nKosongkan jika tidak ada.',
-      ui.ButtonSet.OK_CANCEL
-    );
-    if (extPrompt.getSelectedButton() !== ui.Button.OK) return;
-    var extText = extPrompt.getResponseText().trim().toUpperCase();
-    var extColumn = extText ? convertLetterToColumn(extText) : -1;
-    var rootPrompt = ui.prompt(
-      'RootID Column',
-      'Masukkan huruf kolom RootID.\nContoh: C',
-      ui.ButtonSet.OK_CANCEL
-    );
-    if (rootPrompt.getSelectedButton() !== ui.Button.OK) return;
-    var rootText = rootPrompt.getResponseText().trim().toUpperCase();
-    if (!isValidColumnLetter_(rootText)) {
-      ui.alert('RootID column tidak valid.');
-      return;
-    }
-    var verifyPrompt = ui.prompt(
-      'Verify Output Start Column',
-      'Masukkan huruf kolom awal output Verify.\nContoh: J / K\n\nUrutan Verify harus:\nExists | FileID | FileType | ParentID | VerifiedFilePath | MatchedPathColumn | CheckedPathCount | Error',
-      ui.ButtonSet.OK_CANCEL
-    );
-    if (verifyPrompt.getSelectedButton() !== ui.Button.OK) return;
-    var verifyText = verifyPrompt.getResponseText().trim().toUpperCase();
-    if (!isValidColumnLetter_(verifyText)) {
-      ui.alert('Verify output column tidak valid.');
-      return;
-    }
-    var verifyOutputColumn = convertLetterToColumn(verifyText);
-    var targetPrompt = ui.prompt(
-      'Resolve Output Start Column',
-      'Masukkan huruf kolom awal output Resolve.\n\nOutput:\nResolveStatus | ResolvedID | ResolvedType | ResolvedPath | MatchCount | MatchMethod | Confidence | ResolveNote',
-      ui.ButtonSet.OK_CANCEL
-    );
-    if (targetPrompt.getSelectedButton() !== ui.Button.OK) return;
-    var targetText = targetPrompt.getResponseText().trim().toUpperCase();
-    if (!isValidColumnLetter_(targetText)) {
-      ui.alert('Resolve output column tidak valid.');
-      return;
-    }
-    var targetColumn = convertLetterToColumn(targetText);
-    var batchPrompt = ui.prompt(
-      'Resolve Batch Size',
-      'Masukkan jumlah row per batch.',
-      ui.ButtonSet.OK_CANCEL
-    );
-    if (batchPrompt.getSelectedButton() !== ui.Button.OK) return;
-    var batchSize = parseInt(batchPrompt.getResponseText(), 10);
-    if (isNaN(batchSize) || batchSize < RESOLVE_MIN_BATCH_SIZE) {
-      batchSize = RESOLVE_DEFAULT_BATCH_SIZE;
-    }
-    if (batchSize > RESOLVE_MAX_BATCH_SIZE) {
-      ui.alert(
-        'Batch terlalu besar. Maksimal: ' + RESOLVE_MAX_BATCH_SIZE
-      );
-      return;
-    }
-    var gapPrompt = ui.prompt(
-      'Interval Menit',
-      'Minimal 5 menit.',
-      ui.ButtonSet.OK_CANCEL
-    );
-    if (gapPrompt.getSelectedButton() !== ui.Button.OK) return;
-    var gap = parseInt(gapPrompt.getResponseText(), 10);
-    if (isNaN(gap) || gap < RESOLVE_MIN_TRIGGER_GAP_MINUTES) {
-      gap = RESOLVE_DEFAULT_TRIGGER_GAP_MINUTES;
-    }
-    if (gap > RESOLVE_MAX_TRIGGER_GAP_MINUTES) {
-      ui.alert(
-        'Interval terlalu besar. Maksimal: ' +
-          RESOLVE_MAX_TRIGGER_GAP_MINUTES +
-          ' menit.'
-      );
-      return;
     }
     deleteExistingTriggers_();
     props.deleteProperty('AUTO_LAST_ERROR');
     props.deleteProperty('AUTO_BACKOFF_UNTIL');
-    var startRow = range.getRow();
-    var endRow = startRow + range.getNumRows() - 1;
-    var timestampNow = Date.now().toString();
-    props.setProperty(ENGINE_STATE_KEY, 'TRUE');
+    var timestampNow =
+      Date.now().toString();
+    props.setProperty(
+      ENGINE_STATE_KEY,
+      'TRUE'
+    );
     props.setProperties({
-      RESOLVE_CURRENT_ROW: startRow.toString(),
-      RESOLVE_END_ROW: endRow.toString(),
-      RESOLVE_PATH_COLUMNS: pathColumns.join(','),
-      RESOLVE_FILE_COLUMN: fileColumn.toString(),
-      RESOLVE_EXTENSION_COLUMN: extColumn.toString(),
-      RESOLVE_VERIFY_OUTPUT_COLUMN: verifyOutputColumn.toString(),
-      RESOLVE_ROOT_ID_COLUMN: convertLetterToColumn(rootText).toString(),
-      RESOLVE_TARGET_COL: targetColumn.toString(),
-      RESOLVE_SPREADSHEET_ID: ss.getId(),
-      RESOLVE_SHEET_NAME: sheet.getName(),
-      RESOLVE_BATCH_SIZE: batchSize.toString(),
-      RESOLVE_LAST_SUCCESS_TS: timestampNow,
-      RESOLVE_ENGINE_STARTED_AT: timestampNow
+      RESOLVE_CURRENT_ROW:
+        normalizedConfig.startRow.toString(),
+      RESOLVE_END_ROW:
+        normalizedConfig.endRow.toString(),
+      RESOLVE_PATH_COLUMNS:
+        normalizedConfig.pathColumns.join(','),
+      RESOLVE_FILE_COLUMN:
+        normalizedConfig.fileColumn.toString(),
+      RESOLVE_EXTENSION_COLUMN:
+        normalizedConfig.extensionColumn.toString(),
+      RESOLVE_VERIFY_OUTPUT_COLUMN:
+        normalizedConfig.verifyOutputColumn.toString(),
+      RESOLVE_ROOT_ID_COLUMN:
+        normalizedConfig.rootIdColumn.toString(),
+      RESOLVE_TARGET_COL:
+        normalizedConfig.resolveOutputColumn.toString(),
+      RESOLVE_SPREADSHEET_ID:
+        normalizedConfig.spreadsheetId,
+      RESOLVE_SHEET_NAME:
+        normalizedConfig.sheetName,
+      RESOLVE_BATCH_SIZE:
+        normalizedConfig.batchSize.toString(),
+      RESOLVE_LAST_SUCCESS_TS:
+        timestampNow,
+      RESOLVE_ENGINE_STARTED_AT:
+        timestampNow
     });
     ScriptApp
-      .newTrigger('TRIGGER_RESOLVE_BATCH_MULTI')
+      .newTrigger(
+        'TRIGGER_RESOLVE_BATCH_MULTI'
+      )
       .timeBased()
-      .everyMinutes(gap)
+      .everyMinutes(
+        normalizedConfig.triggerGapMinutes
+      )
       .create();
     lock.releaseLock();
     lockReleased = true;
     TRIGGER_RESOLVE_BATCH_MULTI();
-    ss.toast(
-      'Resolve batch pertama langsung jalan.',
-      'RESOLVE STARTED',
-      5
-    );
+    return {
+      success: true,
+      mode: 'RESOLVE',
+      startRow: normalizedConfig.startRow,
+      endRow: normalizedConfig.endRow,
+      batchSize: normalizedConfig.batchSize,
+      triggerGapMinutes:
+        normalizedConfig.triggerGapMinutes,
+      message:
+        'Resolve batch pertama langsung jalan.'
+    };
   } finally {
     if (!lockReleased) {
       try {
@@ -167,6 +321,163 @@ function CREATE_RESOLVE_TRIGGER_MULTI() {
       } catch (err) {}
     }
   }
+}
+
+function normalizeResolveAutomationConfig_(config) {
+  if (!config) {
+    throw new Error(
+      'Resolve config is required.'
+    );
+  }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  var spreadsheetId =
+    config.spreadsheetId || ss.getId();
+  var sheetName =
+    config.sheetName || sheet.getName();
+  var startRow =
+    parseInt(config.startRow, 10);
+  var endRow =
+    parseInt(config.endRow, 10);
+  if (
+    isNaN(startRow) ||
+    isNaN(endRow) ||
+    startRow < 1 ||
+    endRow < startRow
+  ) {
+    throw new Error(
+      'Resolve row range tidak valid.'
+    );
+  }
+  var pathColumns =
+    normalizeResolvePathColumns_(
+      config.pathColumns
+    );
+  if (!pathColumns.length) {
+    throw new Error(
+      'Path column tidak valid.'
+    );
+  }
+  var fileColumn =
+    normalizeResolveOptionalColumn_(
+      config.fileColumn
+    );
+  var extensionColumn =
+    normalizeResolveOptionalColumn_(
+      config.extensionColumn
+    );
+  var rootIdColumn =
+    normalizeRequiredColumn_(
+      config.rootIdColumn
+    );
+  var verifyOutputColumn =
+    normalizeRequiredColumn_(
+      config.verifyOutputColumn
+    );
+  var resolveOutputColumn =
+    normalizeRequiredColumn_(
+      config.resolveOutputColumn ||
+        config.targetColumn
+    );
+  var batchSize =
+    config.batchSize === '' ||
+    config.batchSize === null ||
+    config.batchSize === undefined
+      ? RESOLVE_DEFAULT_BATCH_SIZE
+      : parseInt(config.batchSize, 10);
+  if (
+    isNaN(batchSize) ||
+    batchSize < RESOLVE_MIN_BATCH_SIZE
+  ) {
+    batchSize = RESOLVE_DEFAULT_BATCH_SIZE;
+  }
+  if (batchSize > RESOLVE_MAX_BATCH_SIZE) {
+    throw new Error(
+      'Batch terlalu besar. Maksimal: ' +
+        RESOLVE_MAX_BATCH_SIZE
+    );
+  }
+  var triggerGapMinutes =
+    config.triggerGapMinutes === '' ||
+    config.triggerGapMinutes === null ||
+    config.triggerGapMinutes === undefined
+      ? RESOLVE_DEFAULT_TRIGGER_GAP_MINUTES
+      : parseInt(config.triggerGapMinutes, 10);
+  if (
+    isNaN(triggerGapMinutes) ||
+    triggerGapMinutes <
+      RESOLVE_MIN_TRIGGER_GAP_MINUTES
+  ) {
+    triggerGapMinutes =
+      RESOLVE_DEFAULT_TRIGGER_GAP_MINUTES;
+  }
+  if (
+    triggerGapMinutes >
+    RESOLVE_MAX_TRIGGER_GAP_MINUTES
+  ) {
+    throw new Error(
+      'Interval terlalu besar. Maksimal: ' +
+        RESOLVE_MAX_TRIGGER_GAP_MINUTES +
+        ' menit.'
+    );
+  }
+  return {
+    startRow: startRow,
+    endRow: endRow,
+    pathColumns: pathColumns,
+    fileColumn: fileColumn,
+    extensionColumn: extensionColumn,
+    rootIdColumn: rootIdColumn,
+    verifyOutputColumn: verifyOutputColumn,
+    resolveOutputColumn:
+      resolveOutputColumn,
+    batchSize: batchSize,
+    triggerGapMinutes: triggerGapMinutes,
+    spreadsheetId: spreadsheetId,
+    sheetName: sheetName
+  };
+}
+
+function normalizeResolvePathColumns_(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map(function(column) {
+        return parseInt(column, 10);
+      })
+      .filter(function(column) {
+        return !isNaN(column) && column > 0;
+      });
+  }
+  return parseResolveColumnSpec_(
+    value
+      .toString()
+      .trim()
+      .toUpperCase()
+  );
+}
+
+function normalizeResolveOptionalColumn_(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === '' ||
+    value === 0 ||
+    value === -1
+  ) {
+    return -1;
+  }
+  if (
+    typeof value === 'number' &&
+    value > 0
+  ) {
+    return value;
+  }
+  if (!isValidColumnLetter_(value)) {
+    throw new Error(
+      'Optional column tidak valid.'
+    );
+  }
+  return convertLetterToColumn(value);
 }
 
 function TRIGGER_RESOLVE_BATCH_MULTI() {
@@ -260,14 +571,11 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
   var batchCache = {};
   for (var i = 0; i < rowValues.length; i++) {
     var row = rowValues[i];
-
     var existsValue = getResolveRowValue_(row, verifyOutputColumn - 1);
-
     var errorValue = getResolveRowValue_(
       row,
       verifyOutputColumn + OUTPUT_WIDTH - 2
     );
-
     var existsText =
       existsValue === null ||
       existsValue === undefined
@@ -276,7 +584,6 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
             .toString()
             .trim()
             .toUpperCase();
-
     var errorText =
       errorValue === null ||
       errorValue === undefined
@@ -284,12 +591,10 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
         : errorValue
             .toString()
             .trim();
-
     if (!existsText && !errorText) {
       output.push(existingOutput[i]);
       continue;
     }
-
     if (existsText === 'TRUE') {
       output.push(
         convertResolveResultToRow_(
@@ -307,12 +612,10 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
       );
       continue;
     }
-
     if (existingOutput[i][0] !== '') {
       output.push(existingOutput[i]);
       continue;
     }
-
     if (!isFailedVerifyRow_(existsValue, errorValue)) {
       output.push(
         convertResolveResultToRow_(

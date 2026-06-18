@@ -1,8 +1,22 @@
 function CREATE_TIME_TRIGGER_MULTI() {
-  var ui = SpreadsheetApp.getUi();
-  var sheet = SpreadsheetApp
+  var config = collectVerifyConfigFromPrompts_();
+  if (!config) {
+    return;
+  }
+  var result = startVerifyAutomation_(config);
+  SpreadsheetApp
     .getActiveSpreadsheet()
-    .getActiveSheet();
+    .toast(
+      result.message,
+      'VERRACT',
+      5
+    );
+}
+
+function collectVerifyConfigFromPrompts_() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
   var range = sheet.getActiveRange();
   if (!range) {
     ui.alert(
@@ -10,7 +24,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
       'Pilih range data dulu.',
       ui.ButtonSet.OK
     );
-    return;
+    return null;
   }
   var startRow = range.getRow();
   var numRows = range.getNumRows();
@@ -29,7 +43,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
     pathColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
-    return;
+    return null;
   }
   var pathColumnParse =
     parseColumnSelection_(
@@ -41,16 +55,15 @@ function CREATE_TIME_TRIGGER_MULTI() {
       pathColumnParse.error,
       ui.ButtonSet.OK
     );
-    return;
+    return null;
   }
-  var pathColumns =
-    pathColumnParse.columns;
+  var pathColumns = pathColumnParse.columns;
   if (
     !confirmLargePathColumnSelection_(
       pathColumns.length
     )
   ) {
-    return;
+    return null;
   }
   var fileColumnResponse = ui.prompt(
     'File Column',
@@ -64,7 +77,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
     fileColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
-    return;
+    return null;
   }
   var fileColumnText =
     fileColumnResponse
@@ -83,7 +96,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
         fileColumnValidation.error,
         ui.ButtonSet.OK
       );
-      return;
+      return null;
     }
     fileColumn =
       fileColumnValidation.column;
@@ -99,7 +112,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
     extensionColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
-    return;
+    return null;
   }
   var extensionColumnText =
     extensionColumnResponse
@@ -120,7 +133,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
         extensionColumnValidation.error,
         ui.ButtonSet.OK
       );
-      return;
+      return null;
     }
     extensionColumn =
       extensionColumnValidation.column;
@@ -135,7 +148,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
     rootIdColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
-    return;
+    return null;
   }
   var rootIdColumnValidation =
     validateFileColumn_(
@@ -147,7 +160,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
       rootIdColumnValidation.error,
       ui.ButtonSet.OK
     );
-    return;
+    return null;
   }
   var rootIdColumn =
     rootIdColumnValidation.column;
@@ -164,7 +177,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
       inputValidation.error,
       ui.ButtonSet.OK
     );
-    return;
+    return null;
   }
   var targetColumnResponse = ui.prompt(
     'Output Column',
@@ -179,7 +192,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
     targetColumnResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
-    return;
+    return null;
   }
   var targetColumnValidation =
     validateFileColumn_(
@@ -191,7 +204,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
       targetColumnValidation.error,
       ui.ButtonSet.OK
     );
-    return;
+    return null;
   }
   var targetColumn =
     targetColumnValidation.column;
@@ -205,7 +218,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
       OUTPUT_WIDTH
     )
   ) {
-    return;
+    return null;
   }
   if (
     !confirmOutputWithinSheetBoundary_(
@@ -214,7 +227,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
       OUTPUT_WIDTH
     )
   ) {
-    return;
+    return null;
   }
   if (
     !confirmNonBlankMainOutput_(
@@ -224,7 +237,7 @@ function CREATE_TIME_TRIGGER_MULTI() {
       numRows
     )
   ) {
-    return;
+    return null;
   }
   var batchSizeResponse = ui.prompt(
     'Batch Size',
@@ -243,32 +256,32 @@ function CREATE_TIME_TRIGGER_MULTI() {
     batchSizeResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
-    return;
+    return null;
   }
-var batchSizeText =
-  batchSizeResponse
-    .getResponseText()
-    .toString()
-    .trim();
-var batchSize =
-  batchSizeText
-    ? parseInt(batchSizeText, 10)
-    : DEFAULT_BATCH_SIZE;
-if (
-  isNaN(batchSize) ||
-  batchSize < MIN_BATCH_SIZE ||
-  batchSize > MAX_BATCH_SIZE
-) {
-  ui.alert(
-    'Invalid Batch Size',
-    'Batch size tidak valid.\n\n' +
-      'Kosongkan untuk memakai default: ' +
-      DEFAULT_BATCH_SIZE +
-      '.',
-    ui.ButtonSet.OK
-  );
-  return;
-}
+  var batchSizeText =
+    batchSizeResponse
+      .getResponseText()
+      .toString()
+      .trim();
+  var batchSize =
+    batchSizeText
+      ? parseInt(batchSizeText, 10)
+      : DEFAULT_BATCH_SIZE;
+  if (
+    isNaN(batchSize) ||
+    batchSize < MIN_BATCH_SIZE ||
+    batchSize > MAX_BATCH_SIZE
+  ) {
+    ui.alert(
+      'Invalid Batch Size',
+      'Batch size tidak valid.\n\n' +
+        'Kosongkan untuk memakai default: ' +
+        DEFAULT_BATCH_SIZE +
+        '.',
+      ui.ButtonSet.OK
+    );
+    return null;
+  }
   var workloadValidation =
     validateVerifyWorkload_(
       batchSize,
@@ -280,7 +293,7 @@ if (
       workloadValidation.error,
       ui.ButtonSet.OK
     );
-    return;
+    return null;
   }
   var intervalResponse = ui.prompt(
     'Trigger Interval',
@@ -299,70 +312,93 @@ if (
     intervalResponse.getSelectedButton() !==
     ui.Button.OK
   ) {
-    return;
+    return null;
   }
-var triggerGapText =
-  intervalResponse
-    .getResponseText()
-    .toString()
-    .trim();
-var triggerGap =
-  triggerGapText
-    ? parseInt(triggerGapText, 10)
-    : DEFAULT_TRIGGER_GAP_MINUTES;
-if (
-  isNaN(triggerGap) ||
-  triggerGap < MIN_TRIGGER_GAP_MINUTES ||
-  triggerGap > MAX_TRIGGER_GAP_MINUTES
-) {
-  ui.alert(
-    'Invalid Trigger Interval',
-    'Interval trigger tidak valid.\n\n' +
-      'Kosongkan untuk memakai default: ' +
-      DEFAULT_TRIGGER_GAP_MINUTES +
-      ' menit.',
-    ui.ButtonSet.OK
-  );
-  return;
+  var triggerGapText =
+    intervalResponse
+      .getResponseText()
+      .toString()
+      .trim();
+  var triggerGap =
+    triggerGapText
+      ? parseInt(triggerGapText, 10)
+      : DEFAULT_TRIGGER_GAP_MINUTES;
+  if (
+    isNaN(triggerGap) ||
+    triggerGap < MIN_TRIGGER_GAP_MINUTES ||
+    triggerGap > MAX_TRIGGER_GAP_MINUTES
+  ) {
+    ui.alert(
+      'Invalid Trigger Interval',
+      'Interval trigger tidak valid.\n\n' +
+        'Kosongkan untuk memakai default: ' +
+        DEFAULT_TRIGGER_GAP_MINUTES +
+        ' menit.',
+      ui.ButtonSet.OK
+    );
+    return null;
+  }
+  return {
+    startRow: startRow,
+    endRow: endRow,
+    pathColumns: pathColumns,
+    fileColumn: fileColumn,
+    extensionColumn: extensionColumn,
+    rootIdColumn: rootIdColumn,
+    verifyOutputColumn: targetColumn,
+    batchSize: batchSize,
+    triggerGapMinutes: triggerGap,
+    spreadsheetId: ss.getId(),
+    sheetName: sheet.getName()
+  };
 }
+
+function startVerifyAutomation_(config) {
+  var normalizedConfig =
+    normalizeVerifyAutomationConfig_(config);
   var props =
     PropertiesService.getScriptProperties();
+  checkEngineHeartbeat_();
   if (
     props.getProperty(ENGINE_STATE_KEY) ===
     'TRUE'
   ) {
-    ui.alert(
-      'Engine Locked',
-      'Engine masih aktif. Jalankan Stop & Reset dulu.',
-      ui.ButtonSet.OK
+    throw new Error(
+      'Engine masih aktif. Jalankan Stop & Reset dulu.'
     );
-    return;
   }
   deleteExistingTriggers_();
+  props.deleteProperty('AUTO_LAST_ERROR');
+  props.deleteProperty('AUTO_BACKOFF_UNTIL');
+  var timestampNow =
+    Date.now().toString();
   props.setProperties({
-    AUTO_CURRENT_ROW: startRow.toString(),
-    AUTO_END_ROW: endRow.toString(),
-    AUTO_PATH_COLUMNS: JSON.stringify(
-      pathColumns
-    ),
-    AUTO_FILE_COLUMN: fileColumn.toString(),
+    AUTO_CURRENT_ROW:
+      normalizedConfig.startRow.toString(),
+    AUTO_END_ROW:
+      normalizedConfig.endRow.toString(),
+    AUTO_PATH_COLUMNS:
+      JSON.stringify(
+        normalizedConfig.pathColumns
+      ),
+    AUTO_FILE_COLUMN:
+      normalizedConfig.fileColumn.toString(),
     AUTO_EXTENSION_COLUMN:
-      extensionColumn.toString(),
+      normalizedConfig.extensionColumn.toString(),
     AUTO_ROOT_ID_COLUMN:
-      rootIdColumn.toString(),
+      normalizedConfig.rootIdColumn.toString(),
     AUTO_TARGET_COL:
-      targetColumn.toString(),
+      normalizedConfig.verifyOutputColumn.toString(),
     AUTO_SPREADSHEET_ID:
-      SpreadsheetApp
-        .getActiveSpreadsheet()
-        .getId(),
-    AUTO_SHEET_NAME: sheet.getName(),
+      normalizedConfig.spreadsheetId,
+    AUTO_SHEET_NAME:
+      normalizedConfig.sheetName,
     DYNAMIC_BATCH_SIZE:
-      batchSize.toString(),
+      normalizedConfig.batchSize.toString(),
     AUTO_ENGINE_STARTED_AT:
-      Date.now().toString(),
+      timestampNow,
     AUTO_LAST_SUCCESS_TS:
-      Date.now().toString()
+      timestampNow
   });
   props.setProperty(
     ENGINE_STATE_KEY,
@@ -373,16 +409,206 @@ if (
       'TRIGGER_BATCH_AUDIT_MULTI'
     )
     .timeBased()
-    .everyMinutes(triggerGap)
+    .everyMinutes(
+      normalizedConfig.triggerGapMinutes
+    )
     .create();
-  SpreadsheetApp
-    .getActiveSpreadsheet()
-    .toast(
-      'File verification started.',
-      'VERRACT',
-      5
-    );
   TRIGGER_BATCH_AUDIT_MULTI();
+  return {
+    success: true,
+    mode: 'VERIFY',
+    startRow: normalizedConfig.startRow,
+    endRow: normalizedConfig.endRow,
+    batchSize: normalizedConfig.batchSize,
+    triggerGapMinutes:
+      normalizedConfig.triggerGapMinutes,
+    message: 'File verification started.'
+  };
+}
+
+function normalizeVerifyAutomationConfig_(config) {
+  if (!config) {
+    throw new Error(
+      'Verify config is required.'
+    );
+  }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  var spreadsheetId =
+    config.spreadsheetId || ss.getId();
+  var sheetName =
+    config.sheetName || sheet.getName();
+  var startRow =
+    parseInt(config.startRow, 10);
+  var endRow =
+    parseInt(config.endRow, 10);
+  if (
+    isNaN(startRow) ||
+    isNaN(endRow) ||
+    startRow < 1 ||
+    endRow < startRow
+  ) {
+    throw new Error(
+      'Verify row range tidak valid.'
+    );
+  }
+  var pathColumns =
+    normalizeVerifyPathColumns_(
+      config.pathColumns
+    );
+  if (!pathColumns.length) {
+    throw new Error(
+      'Path column tidak valid.'
+    );
+  }
+  var fileColumn =
+    normalizeOptionalColumn_(
+      config.fileColumn
+    );
+  var extensionColumn =
+    normalizeOptionalColumn_(
+      config.extensionColumn
+    );
+  var rootIdColumn =
+    normalizeRequiredColumn_(
+      config.rootIdColumn
+    );
+  var verifyOutputColumn =
+    normalizeRequiredColumn_(
+      config.verifyOutputColumn ||
+        config.targetColumn
+    );
+  var inputValidation =
+    validateInputColumns_(
+      pathColumns,
+      fileColumn,
+      rootIdColumn,
+      extensionColumn
+    );
+  if (!inputValidation.isValid) {
+    throw new Error(
+      inputValidation.error
+    );
+  }
+  var batchSize =
+    config.batchSize === '' ||
+    config.batchSize === null ||
+    config.batchSize === undefined
+      ? DEFAULT_BATCH_SIZE
+      : parseInt(config.batchSize, 10);
+  if (
+    isNaN(batchSize) ||
+    batchSize < MIN_BATCH_SIZE ||
+    batchSize > MAX_BATCH_SIZE
+  ) {
+    throw new Error(
+      'Batch size tidak valid.'
+    );
+  }
+  var workloadValidation =
+    validateVerifyWorkload_(
+      batchSize,
+      pathColumns.length
+    );
+  if (!workloadValidation.isValid) {
+    throw new Error(
+      workloadValidation.error
+    );
+  }
+  var triggerGapMinutes =
+    config.triggerGapMinutes === '' ||
+    config.triggerGapMinutes === null ||
+    config.triggerGapMinutes === undefined
+      ? DEFAULT_TRIGGER_GAP_MINUTES
+      : parseInt(config.triggerGapMinutes, 10);
+  if (
+    isNaN(triggerGapMinutes) ||
+    triggerGapMinutes < MIN_TRIGGER_GAP_MINUTES ||
+    triggerGapMinutes > MAX_TRIGGER_GAP_MINUTES
+  ) {
+    throw new Error(
+      'Trigger interval tidak valid.'
+    );
+  }
+  return {
+    startRow: startRow,
+    endRow: endRow,
+    pathColumns: pathColumns,
+    fileColumn: fileColumn,
+    extensionColumn: extensionColumn,
+    rootIdColumn: rootIdColumn,
+    verifyOutputColumn: verifyOutputColumn,
+    batchSize: batchSize,
+    triggerGapMinutes: triggerGapMinutes,
+    spreadsheetId: spreadsheetId,
+    sheetName: sheetName
+  };
+}
+
+function normalizeVerifyPathColumns_(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map(function(column) {
+        return parseInt(column, 10);
+      })
+      .filter(function(column) {
+        return !isNaN(column) && column > 0;
+      });
+  }
+  var parsed =
+    parseColumnSelection_(value);
+  if (!parsed.isValid) {
+    throw new Error(parsed.error);
+  }
+  return parsed.columns;
+}
+
+function normalizeRequiredColumn_(value) {
+  if (
+    typeof value === 'number' &&
+    value > 0
+  ) {
+    return value;
+  }
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    throw new Error(
+      'Required column tidak boleh kosong.'
+    );
+  }
+  var validation =
+    validateFileColumn_(value);
+  if (!validation.isValid) {
+    throw new Error(validation.error);
+  }
+  return validation.column;
+}
+
+function normalizeOptionalColumn_(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === '' ||
+    value === 0 ||
+    value === -1
+  ) {
+    return 0;
+  }
+  if (
+    typeof value === 'number' &&
+    value > 0
+  ) {
+    return value;
+  }
+  var validation =
+    validateFileColumn_(value);
+  if (!validation.isValid) {
+    throw new Error(validation.error);
+  }
+  return validation.column;
 }
 
 function TRIGGER_BATCH_AUDIT_MULTI() {
@@ -619,11 +845,11 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
         outputValues.push([
           false,
           '',
-          '',
-          '',
-          '',
-          '',
           0,
+          '',
+          '',
+          '',
+          '',
           'Missing RootID.'
         ]);
         continue;
@@ -632,11 +858,11 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
         outputValues.push([
           false,
           '',
-          '',
-          '',
-          '',
-          '',
           fileReference.checkedPathCount || 0,
+          '',
+          '',
+          '',
+          '',
           fileReference.error
         ]);
         continue;
@@ -650,12 +876,12 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
         );
       outputValues.push([
         result.exists,
-        result.fileId,
         result.fileType,
+        result.checkedPathCount,
+        result.matchedPathColumn,
+        result.fileId,
         result.parentId,
         result.verifiedFilePath,
-        result.matchedPathColumn,
-        result.checkedPathCount,
         result.error
       ]);
     }

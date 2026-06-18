@@ -252,7 +252,8 @@ function verifyFileAcrossCandidatePaths_(
     );
   }
   var checkedPathCount = 0;
-  var lastError = '';
+  var firstValidPathMiss = null;
+  var firstMissingPathError = '';
   for (
     var i = 0;
     i < uniqueCandidatePaths.length;
@@ -272,16 +273,49 @@ function verifyFileAcrossCandidatePaths_(
       return buildVerifyFileResult_(
         true,
         result.fileId,
-        'file',
-        result.parentId,
+        result.fileType || 'file',
+        result.pathId,
         result.verifiedFilePath,
         candidatePath.columnLetter,
         checkedPathCount,
         ''
       );
     }
-    lastError =
-      result.error || lastError;
+    if (
+      !firstValidPathMiss &&
+      result.pathId
+    ) {
+      firstValidPathMiss = {
+        fileType: result.fileType || 'folder',
+        pathId: result.pathId,
+        verifiedFilePath:
+          result.verifiedFilePath ||
+          normalizePathForTraversal_(
+            candidatePath.path
+          ),
+        matchedPathColumn:
+          candidatePath.columnLetter
+      };
+    }
+    if (
+      !firstMissingPathError &&
+      result.error
+    ) {
+      firstMissingPathError =
+        result.error;
+    }
+  }
+  if (firstValidPathMiss) {
+    return buildVerifyFileResult_(
+      false,
+      '',
+      firstValidPathMiss.fileType,
+      firstValidPathMiss.pathId,
+      firstValidPathMiss.verifiedFilePath,
+      firstValidPathMiss.matchedPathColumn,
+      checkedPathCount,
+      'Path found, but file not found.'
+    );
   }
   return buildVerifyFileResult_(
     false,
@@ -291,8 +325,8 @@ function verifyFileAcrossCandidatePaths_(
     '',
     '',
     checkedPathCount,
-    lastError ||
-      'File not found in candidate paths.'
+    firstMissingPathError ||
+      'No valid candidate path found.'
   );
 }
 
@@ -357,7 +391,8 @@ function verifyFileAtCandidatePath_(
     return {
       exists: false,
       fileId: '',
-      parentId: '',
+      fileType: '',
+      pathId: '',
       verifiedFilePath: '',
       error: 'Missing path.'
     };
@@ -372,7 +407,8 @@ function verifyFileAtCandidatePath_(
     return {
       exists: false,
       fileId: '',
-      parentId: '',
+      fileType: '',
+      pathId: '',
       verifiedFilePath: '',
       error: folderResult.error
     };
@@ -380,31 +416,185 @@ function verifyFileAtCandidatePath_(
   var files =
     folderResult.folder
       .getFilesByName(filename);
-  if (!files.hasNext()) {
+  if (files.hasNext()) {
+    var file = files.next();
     return {
-      exists: false,
-      fileId: '',
-      parentId:
+      exists: true,
+      fileId: file.getId(),
+      fileType: 'file',
+      pathId:
         folderResult.folder.getId(),
-      verifiedFilePath: '',
-      error:
-        'File not found: ' +
-        filename
+      verifiedFilePath:
+        joinPathAndFilename_(
+          normalizedPath,
+          filename
+        ),
+      error: ''
     };
   }
-  var file = files.next();
+  if (
+    isLikelySameObjectName_(
+      getLeafSegmentFromPath_(
+        normalizedPath
+      ),
+      filename
+    )
+  ) {
+    return {
+      exists: false,
+      type: 'folder',
+      fileId: '',
+      pathId:
+        folderResult.folder.getId(),
+      verifiedFilePath:
+        normalizedPath,
+      error:
+        'Path found, but file not found.'
+    };
+  }
   return {
-    exists: true,
-    fileId: file.getId(),
-    parentId:
+    exists: false,
+    fileId: '',
+    fileType: 'folder',
+    pathId:
       folderResult.folder.getId(),
     verifiedFilePath:
-      joinPathAndFilename_(
-        normalizedPath,
-        filename
-      ),
-    error: ''
+      normalizedPath,
+    error:
+      'Path found, but file not found.'
   };
+}
+
+function getLeafSegmentFromPath_(
+  pathValue
+) {
+  var normalizedPath =
+    normalizePathForTraversal_(
+      pathValue
+    );
+  if (!normalizedPath) {
+    return '';
+  }
+  var segments =
+    normalizedPath.split('\\');
+  return segments.length
+    ? segments[segments.length - 1]
+    : '';
+}
+
+function isLikelySameObjectName_(
+  candidateName,
+  filename
+) {
+  var candidateTokens =
+    tokenizeObjectName_(
+      candidateName
+    );
+  var filenameTokens =
+    tokenizeObjectName_(
+      stripExtensionFromName_(
+        filename
+      )
+    );
+  if (
+    candidateTokens.length === 0 ||
+    filenameTokens.length === 0
+  ) {
+    return false;
+  }
+  var candidateKey =
+    candidateTokens.join('|');
+  var filenameKey =
+    filenameTokens.join('|');
+  if (candidateKey === filenameKey) {
+    return true;
+  }
+  var candidateMap = {};
+  var filenameMap = {};
+  var sharedCount = 0;
+  for (
+    var i = 0;
+    i < candidateTokens.length;
+    i++
+  ) {
+    candidateMap[
+      candidateTokens[i]
+    ] = true;
+  }
+  for (
+    var j = 0;
+    j < filenameTokens.length;
+    j++
+  ) {
+    filenameMap[
+      filenameTokens[j]
+    ] = true;
+  }
+  for (var key in candidateMap) {
+    if (filenameMap[key]) {
+      sharedCount++;
+    }
+  }
+  var candidateCoverage =
+    sharedCount /
+    Object.keys(candidateMap).length;
+  var filenameCoverage =
+    sharedCount /
+    Object.keys(filenameMap).length;
+  return (
+    sharedCount >= 3 &&
+    candidateCoverage >= 0.85 &&
+    filenameCoverage >= 0.85
+  );
+}
+
+function tokenizeObjectName_(
+  value
+) {
+  var text = value
+    ? value.toString().toLowerCase()
+    : '';
+  text =
+    stripExtensionFromName_(
+      text
+    );
+  text = text
+    .replace(/[_\-]+/g, ' ')
+    .replace(/[^\w]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) {
+    return [];
+  }
+  var parts = text.split(' ');
+  var seen = {};
+  var tokens = [];
+  for (
+    var i = 0;
+    i < parts.length;
+    i++
+  ) {
+    var part = parts[i].trim();
+    if (!part || seen[part]) {
+      continue;
+    }
+    seen[part] = true;
+    tokens.push(part);
+  }
+  tokens.sort();
+  return tokens;
+}
+
+function stripExtensionFromName_(
+  value
+) {
+  var text = value
+    ? value.toString().trim()
+    : '';
+  return text.replace(
+    /\.[^.\s\\\/]+$/,
+    ''
+  );
 }
 
 function resolveFolderFromRootId_(
@@ -502,7 +692,13 @@ function resolveFolderFromRootId_(
         folder: null,
         error:
           'Missing folder: ' +
-          segment
+          segment +
+          ' | Parent path: ' +
+          segments
+            .slice(0, i)
+            .join('\\') +
+          ' | Full target: ' +
+          normalizedPath
       };
     }
     folder = childFolders.next();
