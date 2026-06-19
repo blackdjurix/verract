@@ -740,6 +740,23 @@ function writeMappedOutputRows_(
     return;
   }
 
+  var sharedFieldMap = {};
+
+  if (
+    typeof SHARED_OUTPUT_FIELDS !==
+    'undefined'
+  ) {
+    for (
+      var sharedIndex = 0;
+      sharedIndex < SHARED_OUTPUT_FIELDS.length;
+      sharedIndex++
+    ) {
+      sharedFieldMap[
+        SHARED_OUTPUT_FIELDS[sharedIndex]
+      ] = true;
+    }
+  }
+
   for (
     var i = 0;
     i < fields.length;
@@ -752,6 +769,19 @@ function writeMappedOutputRows_(
       continue;
     }
 
+    var existingValues = null;
+
+    if (sharedFieldMap[field]) {
+      existingValues = sheet
+        .getRange(
+          startRow,
+          column,
+          numRows,
+          1
+        )
+        .getValues();
+    }
+
     var values = [];
 
     for (
@@ -759,12 +789,22 @@ function writeMappedOutputRows_(
       rowIndex < numRows;
       rowIndex++
     ) {
-      values.push([
+      var nextValue =
         rowObjects[rowIndex][field] ===
           undefined
           ? ''
-          : rowObjects[rowIndex][field]
-      ]);
+          : rowObjects[rowIndex][field];
+
+      if (
+        sharedFieldMap[field] &&
+        (nextValue === '' ||
+          nextValue === null ||
+          nextValue === undefined)
+      ) {
+        nextValue = existingValues[rowIndex][0];
+      }
+
+      values.push([nextValue]);
     }
 
     sheet
@@ -781,6 +821,21 @@ function writeMappedOutputRows_(
 function convertVerifyResultToObject_(
   result
 ) {
+  var exists = !!result.exists;
+  var fileId = exists
+    ? result.fileId || ''
+    : '';
+  var pathId = exists
+    ? result.pathId ||
+      result.parentId ||
+      ''
+    : '';
+  var verifiedPath = exists
+    ? result.verifiedFilePath || ''
+    : '';
+  var splitPath =
+    splitPathAndFilename_(verifiedPath);
+
   return {
     Exists: result.exists,
     Type:
@@ -798,7 +853,18 @@ function convertVerifyResultToObject_(
       '',
     VerifiedFilePath:
       result.verifiedFilePath || '',
-    Error: result.error || ''
+    Error: result.error || '',
+    SharedPathID: pathId,
+    SharedFileID: fileId,
+    SharedPath: fileId
+      ? splitPath.path
+      : '',
+    SharedFilename: fileId
+      ? splitPath.filename
+      : '',
+    SharedSource: fileId
+      ? 'VERIFY'
+      : ''
   };
 }
 
@@ -812,6 +878,12 @@ function buildVerifyOutputObject_(
   verifiedFilePath,
   error
 ) {
+  var isValid = !!exists;
+  var splitPath =
+    splitPathAndFilename_(
+      verifiedFilePath || ''
+    );
+
   return {
     Exists: exists,
     Type: type || '',
@@ -823,7 +895,23 @@ function buildVerifyOutputObject_(
     PathID: pathId || '',
     VerifiedFilePath:
       verifiedFilePath || '',
-    Error: error || ''
+    Error: error || '',
+    SharedPathID: isValid
+      ? pathId || ''
+      : '',
+    SharedFileID: isValid
+      ? fileId || ''
+      : '',
+    SharedPath: isValid
+      ? splitPath.path
+      : '',
+    SharedFilename: isValid
+      ? splitPath.filename
+      : '',
+    SharedSource:
+      isValid && fileId
+        ? 'VERIFY'
+        : ''
   };
 }
 
@@ -832,19 +920,74 @@ function convertResolveRowToObject_(
 ) {
   row = row || [];
 
+  var status = row[0] || '';
+  var resolvedId = row[1] || '';
+  var resolvedType = row[2] || '';
+  var resolvedPath = row[3] || '';
+  var matchCount = parseInt(row[4] || 0, 10);
+  var canShare =
+    status === 'FOUND_SINGLE' &&
+    matchCount === 1 &&
+    resolvedId;
+  var splitPath =
+    splitPathAndFilename_(resolvedPath);
+
   return {
-    ResolveStatus: row[0] || '',
-    ResolvedID: row[1] || '',
-    ResolvedType: row[2] || '',
-    ResolvedPath: row[3] || '',
+    ResolveStatus: status,
+    ResolvedID: resolvedId,
+    ResolvedType: resolvedType,
+    ResolvedPath: resolvedPath,
     MatchCount: row[4] || 0,
     MatchMethod: row[5] || '',
     Confidence: row[6] || '',
-    ResolveNote: row[7] || ''
+    ResolveNote: row[7] || '',
+    SharedPathID: canShare
+      ? row[8] || ''
+      : '',
+    SharedFileID: canShare
+      ? resolvedId
+      : '',
+    SharedPath: canShare
+      ? splitPath.path
+      : '',
+    SharedFilename: canShare
+      ? splitPath.filename
+      : '',
+    SharedSource: canShare
+      ? 'RESOLVE'
+      : ''
+  };
+}
+
+function splitPathAndFilename_(
+  value
+) {
+  var text = value
+    ? value.toString().trim()
+    : '';
+
+  if (!text) {
+    return {
+      path: '',
+      filename: ''
+    };
+  }
+
+  text = text
+    .replace(/[\/]+/g, '\\')
+    .replace(/[\\]+$/g, '');
+
+  var parts = text.split('\\');
+  var filename = parts.pop() || '';
+
+  return {
+    path: parts.join('\\'),
+    filename: filename
   };
 }
 
 function getMappedValue_(
+
   rowObject,
   field
 ) {

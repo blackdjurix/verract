@@ -326,7 +326,7 @@ function startResolveAutomation_(config) {
       RESOLVE_EXTENSION_COLUMN:
         normalizedConfig.extensionColumn.toString(),
       RESOLVE_VERIFY_OUTPUT_COLUMN:
-        normalizedConfig.verifyOutputColumn.toString(),
+        (normalizedConfig.verifyOutputColumn || 0).toString(),
       RESOLVE_VERIFY_OUTPUT_MAPPING:
         serializeOutputMapping_(
           normalizedConfig.verifyOutputMapping
@@ -334,7 +334,7 @@ function startResolveAutomation_(config) {
       RESOLVE_ROOT_ID_COLUMN:
         normalizedConfig.rootIdColumn.toString(),
       RESOLVE_TARGET_COL:
-        normalizedConfig.resolveOutputColumn.toString(),
+        (normalizedConfig.resolveOutputColumn || 0).toString(),
       RESOLVE_OUTPUT_MAPPING:
         serializeOutputMapping_(
           normalizedConfig.outputMapping
@@ -445,16 +445,32 @@ function normalizeResolveAutomationConfig_(config) {
       config.rootIdColumn
     );
 
-  var verifyOutputColumn =
-    normalizeRequiredColumn_(
-      config.verifyOutputColumn
-    );
+  var hasVerifyMapping =
+    config.verifyOutputMapping &&
+    config.verifyOutputMapping.Exists;
 
-  var resolveOutputColumn =
-    normalizeRequiredColumn_(
-      config.resolveOutputColumn ||
-        config.targetColumn
-    );
+  var verifyOutputColumn = 0;
+
+  if (!hasVerifyMapping) {
+    verifyOutputColumn =
+      normalizeRequiredColumn_(
+        config.verifyOutputColumn
+      );
+  }
+
+  var hasExplicitOutputMapping =
+    config.outputMapping &&
+    Object.keys(config.outputMapping).length > 0;
+
+  var resolveOutputColumn = 0;
+
+  if (!hasExplicitOutputMapping) {
+    resolveOutputColumn =
+      normalizeRequiredColumn_(
+        config.resolveOutputColumn ||
+          config.targetColumn
+      );
+  }
 
   var batchSize =
     config.batchSize === '' ||
@@ -515,7 +531,7 @@ function normalizeResolveAutomationConfig_(config) {
     normalizeOutputMapping_(
       config.outputMapping,
       RESOLVE_OUTPUT_FIELDS,
-      resolveOutputColumn
+      resolveOutputColumn || null
     );
 
   return {
@@ -699,8 +715,7 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
     verifyOutputMapping.Exists ||
     verifyOutputColumn;
   var errorColumn =
-    verifyOutputMapping.Error ||
-    (verifyOutputColumn + OUTPUT_WIDTH - 1);
+    verifyOutputMapping.Error || 0;
 
   for (var i = 0; i < rowValues.length; i++) {
     var row = rowValues[i];
@@ -1027,7 +1042,8 @@ function searchResolveFilesByDriveIndex_(rootId, target) {
           id: file.getId(),
           type: 'file',
           name: file.getName(),
-          path: buildDriveObjectPath_(file, rootId)
+          path: buildDriveObjectPath_(file, rootId),
+          pathId: getResolveParentPathId_(file)
         });
       }
     }
@@ -1071,7 +1087,8 @@ function searchResolveFoldersByDriveIndex_(rootId, target) {
           id: folder.getId(),
           type: 'folder',
           name: folder.getName(),
-          path: buildDriveObjectPath_(folder, rootId)
+          path: buildDriveObjectPath_(folder, rootId),
+          pathId: folder.getId()
         });
       }
     }
@@ -1140,7 +1157,8 @@ function buildResolveResultFromSearch_(objectTarget, searchResult, verifyContext
       1,
       objectTarget.method,
       'High',
-      'Single candidate found by Drive index.' + contextNote
+      'Single candidate found by Drive index.' + contextNote,
+      firstMatch.pathId || ''
     );
   }
   return buildResolveResult_(
@@ -1175,6 +1193,23 @@ function isDriveObjectUnderRoot_(object, rootId) {
     }
   }
   return false;
+}
+
+
+function getResolveParentPathId_(object) {
+  if (!object) {
+    return '';
+  }
+
+  try {
+    var parents = object.getParents();
+
+    if (parents.hasNext()) {
+      return parents.next().getId();
+    }
+  } catch (err) {}
+
+  return '';
 }
 
 function buildDriveObjectPath_(object, rootId) {
@@ -1253,10 +1288,16 @@ function isFailedVerifyRow_(existsValue, errorValue) {
   var existsText = existsValue
     ? existsValue.toString().trim().toUpperCase()
     : '';
+
   var hasError =
     errorValue !== '' &&
     errorValue !== null &&
     errorValue !== undefined;
+
+  if (existsText === 'FALSE') {
+    return true;
+  }
+
   return existsText !== 'TRUE' && hasError;
 }
 
@@ -1329,7 +1370,8 @@ function buildResolveResult_(
   matchCount,
   matchMethod,
   confidence,
-  note
+  note,
+  pathId
 ) {
   return {
     status: status || '',
@@ -1339,7 +1381,8 @@ function buildResolveResult_(
     matchCount: matchCount || 0,
     matchMethod: matchMethod || '',
     confidence: confidence || '',
-    note: note || ''
+    note: note || '',
+    pathId: pathId || ''
   };
 }
 
@@ -1352,7 +1395,8 @@ function convertResolveResultToRow_(result) {
     result.matchCount,
     result.matchMethod,
     result.confidence,
-    result.note
+    result.note,
+    result.pathId || ''
   ];
 }
 
