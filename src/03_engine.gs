@@ -447,7 +447,7 @@ function startVerifyAutomation_(config) {
     AUTO_ROOT_ID_COLUMN:
       normalizedConfig.rootIdColumn.toString(),
     AUTO_TARGET_COL:
-      normalizedConfig.verifyOutputColumn.toString(),
+      (normalizedConfig.verifyOutputColumn || 0).toString(),
     AUTO_OUTPUT_MAPPING:
       serializeOutputMapping_(
         normalizedConfig.outputMapping
@@ -552,11 +552,19 @@ function normalizeVerifyAutomationConfig_(config) {
       config.rootIdColumn
     );
 
-  var verifyOutputColumn =
-    normalizeRequiredColumn_(
-      config.verifyOutputColumn ||
-        config.targetColumn
-    );
+  var hasExplicitOutputMapping =
+    config.outputMapping &&
+    Object.keys(config.outputMapping).length > 0;
+
+  var verifyOutputColumn = 0;
+
+  if (!hasExplicitOutputMapping) {
+    verifyOutputColumn =
+      normalizeRequiredColumn_(
+        config.verifyOutputColumn ||
+          config.targetColumn
+      );
+  }
 
   var inputValidation =
     validateInputColumns_(
@@ -622,7 +630,7 @@ function normalizeVerifyAutomationConfig_(config) {
     normalizeOutputMapping_(
       config.outputMapping,
       VERIFY_OUTPUT_FIELDS,
-      verifyOutputColumn
+      verifyOutputColumn || null
     );
 
   return {
@@ -805,7 +813,7 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
           'AUTO_OUTPUT_MAPPING'
         ),
         VERIFY_OUTPUT_FIELDS,
-        targetColumn
+        targetColumn || null
       );
     var batchSize = parseInt(
       props.getProperty(
@@ -818,7 +826,6 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
       !endRow ||
       !pathColumns.length ||
       !rootIdColumn ||
-      !targetColumn ||
       !batchSize
     ) {
       throw new Error(

@@ -77,13 +77,12 @@ var RESOLVE_MAX_TRIGGER_GAP_MINUTES = 60;
 
 var RESOLVE_MAX_CANDIDATES_PER_ROW = 10;
 
+
 /**
- * Verify output fields.
- *
- * Output mapping supports non-contiguous columns.
- * Each field may be enabled or disabled from the HTML sidebar.
+ * Verify evidence output fields.
+ * These are method-specific results from the Verify workflow.
  */
-var VERIFY_OUTPUT_FIELDS = [
+var VERIFY_BASE_OUTPUT_FIELDS = [
   'Exists',
   'Type',
   'CheckedPathCount',
@@ -94,16 +93,11 @@ var VERIFY_OUTPUT_FIELDS = [
   'Error'
 ];
 
-var VERIFY_OUTPUT_MAPPING_PROPERTY =
-  'VERIFY_OUTPUT_MAPPING';
-
 /**
- * Resolve output fields.
- *
- * Output mapping supports non-contiguous columns.
- * Each field may be enabled or disabled from the HTML sidebar.
+ * Resolve evidence output fields.
+ * These are method-specific results from the Resolve workflow.
  */
-var RESOLVE_OUTPUT_FIELDS = [
+var RESOLVE_BASE_OUTPUT_FIELDS = [
   'ResolveStatus',
   'ResolvedID',
   'ResolvedType',
@@ -114,5 +108,39 @@ var RESOLVE_OUTPUT_FIELDS = [
   'ResolveNote'
 ];
 
+/**
+ * Shared output fields.
+ *
+ * UI label:
+ * SharedPathID   -> PathID
+ * SharedFileID   -> FileID
+ * SharedPath     -> Path
+ * SharedFilename -> Filename
+ * SharedSource   -> Source
+ */
+var SHARED_OUTPUT_FIELDS = [
+  'SharedPathID',
+  'SharedFileID',
+  'SharedPath',
+  'SharedFilename',
+  'SharedSource'
+];
+
+var VERIFY_OUTPUT_FIELDS =
+  VERIFY_BASE_OUTPUT_FIELDS.concat(
+    SHARED_OUTPUT_FIELDS
+  );
+
+var RESOLVE_OUTPUT_FIELDS =
+  RESOLVE_BASE_OUTPUT_FIELDS.concat(
+    SHARED_OUTPUT_FIELDS
+  );
+
+var VERIFY_OUTPUT_MAPPING_PROPERTY =
+  'VERIFY_OUTPUT_MAPPING';
+
 var RESOLVE_OUTPUT_MAPPING_PROPERTY =
   'RESOLVE_OUTPUT_MAPPING';
+
+var SHARED_OUTPUT_MAPPING_PROPERTY =
+  'SHARED_OUTPUT_MAPPING';

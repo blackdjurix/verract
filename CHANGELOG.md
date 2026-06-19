@@ -1,6 +1,42 @@
 # Changelog
 
 <details>
+<summary><strong>v0.3.4 - Shared Output & HTML Workflow</strong></summary>
+
+### Added
+
+* Shared output mapping system
+* Shared PathID output
+* Shared FileID output
+* Shared Path output
+* Shared Filename output
+* Shared Source output
+* Persistent selection workflow
+* Set Selection action
+* Clear Selection action
+* Direct Verify ↔ Resolve navigation
+
+### Improved
+
+* Shared output configuration synchronization between Verify and Resolve
+* Sidebar workflow and navigation
+* Sidebar status reporting
+* Column mapping normalization (automatic uppercase conversion)
+* Selection handling across sidebar sessions
+
+### Changed
+
+* Shared output mapping is now globally managed
+* Verify and Resolve can write to shared outputs independently
+* Blank values no longer overwrite existing shared output values
+
+### Removed
+
+* Dependency on fallback HTML output columns
+
+</details>
+
+<details>
 <summary>v0.3.3 - Custom Output Mapping</summary>
 
 ### Added

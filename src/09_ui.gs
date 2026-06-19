@@ -1,18 +1,22 @@
 // ======================================================
 // verract
-// Version : 0.3.3
+// Version : 0.3.4
 // Author  : blackdjurix
 //
-// Feature : Custom Output Mapping
+// Feature : Shared File Output & UI Cleanup
 //
 // Highlights:
 // - Opens verract sidebar control panel
-// - Reads active sheet selection as workflow snapshot
+// - Supports persistent Set Selection workflow
 // - Starts Verify and Resolve from sidebar form config
-// - Saves and loads sidebar output mapping preferences
+// - Saves Verify, Resolve, and Shared output mappings
+// - Keeps Shared PathID/FileID/Path/Filename/Source mapping global
 // - Provides sidebar-safe status, diagnostics, and reset actions
 // - Keeps Verify and Resolve engines server-side
 // ======================================================
+
+var VERRACT_SELECTION_PROPERTY =
+  'VERRACT_SELECTION_SNAPSHOT';
 
 function OPEN_VERRACT_SIDEBAR() {
   var html = HtmlService
@@ -40,7 +44,7 @@ function GET_VERRACT_ACTIVE_SELECTION() {
   var endRow =
     startRow + range.getNumRows() - 1;
 
-  return {
+  var selection = {
     success: true,
     spreadsheetId: ss.getId(),
     sheetName: sheet.getName(),
@@ -49,6 +53,74 @@ function GET_VERRACT_ACTIVE_SELECTION() {
     endRow: endRow,
     numRows: range.getNumRows()
   };
+
+  saveVerractSelection_(selection);
+
+  return selection;
+}
+
+function GET_VERRACT_SAVED_SELECTION() {
+  var jsonText =
+    PropertiesService
+      .getScriptProperties()
+      .getProperty(
+        VERRACT_SELECTION_PROPERTY
+      );
+
+  if (!jsonText) {
+    return {
+      success: false,
+      message: 'No saved selection.'
+    };
+  }
+
+  try {
+    var selection = JSON.parse(jsonText);
+
+    if (
+      !selection ||
+      !selection.spreadsheetId ||
+      !selection.sheetName ||
+      !selection.startRow ||
+      !selection.endRow
+    ) {
+      throw new Error(
+        'Invalid saved selection.'
+      );
+    }
+
+    selection.success = true;
+    return selection;
+  } catch (err) {
+    CLEAR_VERRACT_SAVED_SELECTION();
+
+    return {
+      success: false,
+      message: 'Saved selection is invalid.'
+    };
+  }
+}
+
+function CLEAR_VERRACT_SAVED_SELECTION() {
+  PropertiesService
+    .getScriptProperties()
+    .deleteProperty(
+      VERRACT_SELECTION_PROPERTY
+    );
+
+  return {
+    success: true,
+    message: 'Selection cleared.'
+  };
+}
+
+function saveVerractSelection_(selection) {
+  PropertiesService
+    .getScriptProperties()
+    .setProperty(
+      VERRACT_SELECTION_PROPERTY,
+      JSON.stringify(selection)
+    );
 }
 
 function GET_VERRACT_OUTPUT_MAPPING_SETTINGS() {
@@ -57,12 +129,17 @@ function GET_VERRACT_OUTPUT_MAPPING_SETTINGS() {
     verify:
       loadSidebarOutputMapping_(
         VERIFY_OUTPUT_MAPPING_PROPERTY,
-        VERIFY_OUTPUT_FIELDS
+        VERIFY_BASE_OUTPUT_FIELDS
       ),
     resolve:
       loadSidebarOutputMapping_(
         RESOLVE_OUTPUT_MAPPING_PROPERTY,
-        RESOLVE_OUTPUT_FIELDS
+        RESOLVE_BASE_OUTPUT_FIELDS
+      ),
+    shared:
+      loadSidebarOutputMapping_(
+        SHARED_OUTPUT_MAPPING_PROPERTY,
+        SHARED_OUTPUT_FIELDS
       )
   };
 }
@@ -71,20 +148,40 @@ function START_VERIFY_FROM_SIDEBAR(config) {
   var preparedConfig =
     normalizeSidebarConfig_(config);
 
-  var normalizedMapping =
+  var verifyMapping =
     normalizeOutputMapping_(
-      preparedConfig.outputMapping,
-      VERIFY_OUTPUT_FIELDS,
+      preparedConfig.verifyOutputMapping || {},
+      VERIFY_BASE_OUTPUT_FIELDS,
       null
     );
 
-  preparedConfig.outputMapping =
-    normalizedMapping;
+  var sharedMapping =
+    normalizeOutputMappingAllowEmpty_(
+      preparedConfig.sharedOutputMapping || {},
+      SHARED_OUTPUT_FIELDS
+    );
 
-  saveSidebarOutputMapping_(
-    VERIFY_OUTPUT_MAPPING_PROPERTY,
-    normalizedMapping,
+  preparedConfig.outputMapping =
+    mergeOutputMappings_(
+      verifyMapping,
+      sharedMapping
+    );
+
+  validateOutputMapping_(
+    preparedConfig.outputMapping,
     VERIFY_OUTPUT_FIELDS
+  );
+
+  saveSidebarOutputMappingAllowEmpty_(
+    VERIFY_OUTPUT_MAPPING_PROPERTY,
+    verifyMapping,
+    VERIFY_BASE_OUTPUT_FIELDS
+  );
+
+  saveSidebarOutputMappingAllowEmpty_(
+    SHARED_OUTPUT_MAPPING_PROPERTY,
+    sharedMapping,
+    SHARED_OUTPUT_FIELDS
   );
 
   var result =
@@ -110,29 +207,55 @@ function START_RESOLVE_FROM_SIDEBAR(config) {
   var preparedConfig =
     normalizeSidebarConfig_(config);
 
-  var normalizedResolveMapping =
+  var resolveMapping =
     normalizeOutputMapping_(
-      preparedConfig.outputMapping,
-      RESOLVE_OUTPUT_FIELDS,
+      preparedConfig.resolveOutputMapping || {},
+      RESOLVE_BASE_OUTPUT_FIELDS,
       null
     );
 
+  var sharedMapping =
+    normalizeOutputMappingAllowEmpty_(
+      preparedConfig.sharedOutputMapping || {},
+      SHARED_OUTPUT_FIELDS
+    );
+
   preparedConfig.outputMapping =
-    normalizedResolveMapping;
+    mergeOutputMappings_(
+      resolveMapping,
+      sharedMapping
+    );
+
+  validateOutputMapping_(
+    preparedConfig.outputMapping,
+    RESOLVE_OUTPUT_FIELDS
+  );
 
   var savedVerifyMapping =
     loadSidebarOutputMappingAsNumbers_(
       VERIFY_OUTPUT_MAPPING_PROPERTY,
-      VERIFY_OUTPUT_FIELDS
+      VERIFY_BASE_OUTPUT_FIELDS
     );
+
+  if (!savedVerifyMapping.Exists) {
+    throw new Error(
+      'Resolve requires Verify Exists output mapping. Run or save Verify mapping with Exists selected first.'
+    );
+  }
 
   preparedConfig.verifyOutputMapping =
     savedVerifyMapping;
 
-  saveSidebarOutputMapping_(
+  saveSidebarOutputMappingAllowEmpty_(
     RESOLVE_OUTPUT_MAPPING_PROPERTY,
-    normalizedResolveMapping,
-    RESOLVE_OUTPUT_FIELDS
+    resolveMapping,
+    RESOLVE_BASE_OUTPUT_FIELDS
+  );
+
+  saveSidebarOutputMappingAllowEmpty_(
+    SHARED_OUTPUT_MAPPING_PROPERTY,
+    sharedMapping,
+    SHARED_OUTPUT_FIELDS
   );
 
   var result =
@@ -186,7 +309,7 @@ function GET_VERRACT_ENGINE_STATUS() {
     running: isRunning,
     status:
       isRunning
-        ? 'Running'
+        ? 'Running ' + (mode || 'Engine')
         : 'Idle',
     mode: mode,
     spreadsheetId:
@@ -286,7 +409,7 @@ function normalizeSidebarConfig_(config) {
     endRow < startRow
   ) {
     throw new Error(
-      'Invalid selected range. Select rows in the sheet, then refresh selection.'
+      'Invalid selected range. Set Selection from the Home page first.'
     );
   }
 
@@ -312,19 +435,109 @@ function normalizeSidebarConfig_(config) {
       10
     );
 
+  config.pathColumns =
+    normalizeSidebarColumnText_(
+      config.pathColumns
+    );
+  config.fileColumn =
+    normalizeSidebarColumnText_(
+      config.fileColumn
+    );
+  config.extensionColumn =
+    normalizeSidebarColumnText_(
+      config.extensionColumn
+    );
+  config.rootIdColumn =
+    normalizeSidebarColumnText_(
+      config.rootIdColumn
+    );
+
   return config;
 }
 
-function saveSidebarOutputMapping_(
+function normalizeSidebarColumnText_(value) {
+  return value
+    ? value.toString().trim().toUpperCase()
+    : '';
+}
+
+function mergeOutputMappings_(a, b) {
+  var result = {};
+  var key;
+
+  for (key in a || {}) {
+    if (a.hasOwnProperty(key)) {
+      result[key] = a[key];
+    }
+  }
+
+  for (key in b || {}) {
+    if (b.hasOwnProperty(key)) {
+      result[key] = b[key];
+    }
+  }
+
+  return result;
+}
+
+function normalizeOutputMappingAllowEmpty_(
+  mapping,
+  allowedFields
+) {
+  var normalized = {};
+
+  if (!mapping) {
+    return normalized;
+  }
+
+  for (
+    var i = 0;
+    i < allowedFields.length;
+    i++
+  ) {
+    var field = allowedFields[i];
+    var columnValue = mapping[field];
+
+    if (
+      columnValue === null ||
+      columnValue === undefined ||
+      columnValue === ''
+    ) {
+      continue;
+    }
+
+    normalized[field] =
+      normalizeOutputColumnValue_(
+        columnValue
+      );
+  }
+
+  if (Object.keys(normalized).length > 0) {
+    var validation =
+      validateOutputMapping_(
+        normalized,
+        allowedFields
+      );
+
+    if (!validation.isValid) {
+      throw new Error(
+        validation.error
+      );
+    }
+  }
+
+  return normalized;
+}
+
+function saveSidebarOutputMappingAllowEmpty_(
   propertyName,
   mapping,
   allowedFields
 ) {
   var normalized =
-    normalizeOutputMapping_(
+    normalizeOutputMappingAllowEmpty_(
       mapping,
-      allowedFields,
-      null
+      allowedFields
     );
 
   PropertiesService
@@ -365,10 +578,9 @@ function loadSidebarOutputMappingAsNumbers_(
   }
 
   try {
-    return normalizeOutputMapping_(
+    return normalizeOutputMappingAllowEmpty_(
       JSON.parse(jsonText),
-      allowedFields,
-      null
+      allowedFields
     );
   } catch (err) {
     return {};
