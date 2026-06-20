@@ -1016,7 +1016,14 @@ function normalizeActionConfig_(config) {
     rootIdColumn: normalizeRequiredColumn_(config.rootIdColumn),
     batchSize: parseInt(config.batchSize || ACTION_DEFAULT_BATCH_SIZE, 10),
     triggerGapMinutes: parseInt(config.triggerGapMinutes || ACTION_DEFAULT_TRIGGER_GAP_MINUTES, 10),
-    outputMapping: normalizeOutputMapping_(config.actionOutputMapping || config.outputMapping || {}, ACTION_OUTPUT_FIELDS)
+    outputMapping: normalizeOutputMapping_(config.actionOutputMapping || config.outputMapping || {}, ACTION_OUTPUT_FIELDS),
+    pipelineMode: config.pipelineMode === true || String(config.pipelineMode || '').toUpperCase() === 'TRUE',
+    resolvedIdColumn: normalizeActionOptionalColumn_(config.resolvedIdColumn),
+    resolveStatusColumn: normalizeActionOptionalColumn_(config.resolveStatusColumn),
+    resolveMatchCountColumn: normalizeActionOptionalColumn_(config.resolveMatchCountColumn),
+    sourceLabelColumn: normalizeActionOptionalColumn_(config.sourceLabelColumn),
+    sourcePathColumn: normalizeActionOptionalColumn_(config.sourcePathColumn),
+    sourceObjectNameColumn: normalizeActionOptionalColumn_(config.sourceObjectNameColumn)
   };
 
   if (!normalized.spreadsheetId || !normalized.sheetName) throw new Error('Action spreadsheet/sheet context is required.');
@@ -1028,6 +1035,16 @@ function normalizeActionConfig_(config) {
 
   validateOutputMapping_(normalized.outputMapping, ACTION_OUTPUT_FIELDS, 'Action');
   return normalized;
+}
+
+
+function normalizeActionOptionalColumn_(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  if (typeof value === 'number') return value > 0 ? Math.floor(value) : 0;
+  var text = String(value).trim();
+  if (!text) return 0;
+  if (/^\d+$/.test(text)) return parseInt(text, 10);
+  return convertLetterToColumn(text);
 }
 
 function normalizeActionOperation_(value) {

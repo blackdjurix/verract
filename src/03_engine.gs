@@ -1112,6 +1112,7 @@ function TRIGGER_MULTI_PHASE_TRANSITION() {
     }
     if (phase === 'ACTION_PREVIEW') {
       var actionConfig = JSON.parse(props.getProperty('PIPELINE_ACTION_CONFIG') || '{}');
+      actionConfig.pipelineMode = true;
       startActionPreviewAutomation_(actionConfig);
       return;
     }

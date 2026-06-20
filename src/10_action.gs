@@ -30,7 +30,14 @@ function startActionPreviewAutomation_(config) {
     ACTION_BATCH_SIZE: normalized.batchSize.toString(),
     ACTION_TRIGGER_GAP_MINUTES: normalized.triggerGapMinutes.toString(),
     ACTION_ENGINE_STARTED_AT: now,
-    ACTION_LAST_SUCCESS_TS: now
+    ACTION_LAST_SUCCESS_TS: now,
+    ACTION_PIPELINE_MODE: normalized.pipelineMode ? 'TRUE' : 'FALSE',
+    ACTION_RESOLVED_ID_COLUMN: normalized.resolvedIdColumn.toString(),
+    ACTION_RESOLVE_STATUS_COLUMN: normalized.resolveStatusColumn.toString(),
+    ACTION_RESOLVE_MATCH_COUNT_COLUMN: normalized.resolveMatchCountColumn.toString(),
+    ACTION_SOURCE_LABEL_COLUMN: normalized.sourceLabelColumn.toString(),
+    ACTION_SOURCE_PATH_COLUMN: normalized.sourcePathColumn.toString(),
+    ACTION_SOURCE_OBJECT_NAME_COLUMN: normalized.sourceObjectNameColumn.toString()
   });
   props.setProperty(ENGINE_STATE_KEY, 'TRUE');
 
@@ -113,20 +120,57 @@ function loadActionRuntimeConfig_(props) {
     operationColumn: parseInt(props.getProperty('ACTION_OPERATION_COLUMN'), 10),
     targetColumn: parseInt(props.getProperty('ACTION_TARGET_COLUMN'), 10),
     rootIdColumn: parseInt(props.getProperty('ACTION_ROOT_ID_COLUMN'), 10),
-    outputMapping: parseStoredOutputMapping_(props.getProperty('ACTION_OUTPUT_MAPPING'), ACTION_OUTPUT_FIELDS)
+    outputMapping: parseStoredOutputMapping_(props.getProperty('ACTION_OUTPUT_MAPPING'), ACTION_OUTPUT_FIELDS),
+    pipelineMode: props.getProperty('ACTION_PIPELINE_MODE') === 'TRUE',
+    resolvedIdColumn: parseInt(props.getProperty('ACTION_RESOLVED_ID_COLUMN'), 10) || 0,
+    resolveStatusColumn: parseInt(props.getProperty('ACTION_RESOLVE_STATUS_COLUMN'), 10) || 0,
+    resolveMatchCountColumn: parseInt(props.getProperty('ACTION_RESOLVE_MATCH_COUNT_COLUMN'), 10) || 0,
+    sourceLabelColumn: parseInt(props.getProperty('ACTION_SOURCE_LABEL_COLUMN'), 10) || 0,
+    sourcePathColumn: parseInt(props.getProperty('ACTION_SOURCE_PATH_COLUMN'), 10) || 0,
+    sourceObjectNameColumn: parseInt(props.getProperty('ACTION_SOURCE_OBJECT_NAME_COLUMN'), 10) || 0
   };
 }
 
 function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
-  var sourceId = getActionCell_(row, config.sourceObjectIdColumn);
+  var primarySourceId = String(getActionCell_(row, config.sourceObjectIdColumn) || '').trim();
+  var resolvedId = config.pipelineMode
+    ? String(getActionCell_(row, config.resolvedIdColumn) || '').trim()
+    : '';
+  var resolveStatus = config.pipelineMode
+    ? String(getActionCell_(row, config.resolveStatusColumn) || '').trim().toUpperCase()
+    : '';
+  var resolveMatchCount = config.pipelineMode
+    ? parseInt(getActionCell_(row, config.resolveMatchCountColumn), 10) || 0
+    : 0;
+  var sourceId = primarySourceId || (resolveStatus === 'FOUND_SINGLE' ? resolvedId : '');
+  var sharedSourceLabel = config.pipelineMode
+    ? String(getActionCell_(row, config.sourceLabelColumn) || '').trim().toUpperCase()
+    : '';
+  var sharedSourcePath = config.pipelineMode
+    ? String(getActionCell_(row, config.sourcePathColumn) || '').trim()
+    : '';
+  var sharedObjectName = config.pipelineMode
+    ? String(getActionCell_(row, config.sourceObjectNameColumn) || '').trim()
+    : '';
   var operation = normalizeActionOperation_(getActionCell_(row, config.operationColumn));
   var target = String(getActionCell_(row, config.targetColumn) || '').trim();
   var rootId = String(getActionCell_(row, config.rootIdColumn) || '').trim();
 
-  if (!sourceId) return actionResult_('MISSING_SOURCE_OBJECT_ID', operation, '', target, '', '', '', 'Source ObjectID is required.');
-  if (!operation) return actionResult_('INVALID_OPERATION', '', sourceId, target, '', '', '', 'Operation must be MOVE, COPY, RENAME, MOVE_RENAME, or DELETE.');
-  if (!rootId) return actionResult_('MISSING_ROOT_ID', operation, sourceId, target, '', '', '', 'RootID is required for single-root target resolution.');
+  if (!operation) return actionResult_('MISSING_OPERATION', '', sourceId, target, '', '', '', 'Operation must be MOVE, COPY, RENAME, MOVE_RENAME, or DELETE.');
   if (operation !== 'DELETE' && !target) return actionResult_('MISSING_TARGET', operation, sourceId, target, '', '', '', 'Target full object path is required.');
+
+  if (!sourceId && config.pipelineMode) {
+    if (isNotFoundResolveStatus_(resolveStatus, resolveMatchCount)) {
+      return actionResult_('SOURCE_NOT_FOUND', operation, '', target, '', '', '', 'Source object was not found. Action Preview was skipped.');
+    }
+    if (isAmbiguousResolveStatus_(resolveStatus, resolveMatchCount) || resolveMatchCount > 1) {
+      return actionResult_('NEEDS_HUMAN_INPUT', operation, '', target, '', '', '', 'Resolve returned multiple candidates. Action Preview was skipped.');
+    }
+    return actionResult_('MISSING_SOURCE_OBJECT_ID', operation, '', target, '', '', '', 'No verified or resolved Source ObjectID is available.');
+  }
+
+  if (!sourceId) return actionResult_('MISSING_SOURCE_OBJECT_ID', operation, '', target, '', '', '', 'Source ObjectID is required.');
+  if (!rootId) return actionResult_('MISSING_ROOT_ID', operation, sourceId, target, '', '', '', 'RootID is required for single-root target resolution.');
 
   var normalizedTarget = target.toLowerCase();
   var key = sourceId + '|' + operation + '|' + normalizedTarget;
@@ -164,21 +208,24 @@ function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
     return actionResult_('SOURCE_TRASHED', operation, sourceId, target, '', '', '', 'Source object is in Trash.');
   }
 
+  var finalSourceLabel = resolveFinalSourceLabel_(sharedSourceLabel, resolveStatus, resolvedId, sourceId, primarySourceId);
+  var finalSourcePath = buildFinalSourcePath_(sharedSourcePath, sharedObjectName, source);
+
   if (operation === 'DELETE') {
-    return actionResult_('READY', operation, sourceId, '', '', '', '', 'Dry-run only. DELETE ' + source.objectType + ' "' + source.objectName + '". Row ' + rowNumber + '.');
+    return enrichPipelineActionResult_(actionResult_('READY', operation, sourceId, '', '', '', '', 'Dry-run only. DELETE ' + source.objectType + ' "' + source.objectName + '". Row ' + rowNumber + '.'), finalSourceLabel, source, finalSourcePath);
   }
 
   var targetPlan = parseActionTarget_(operation, source.objectType, source.objectName, target);
   if (!targetPlan.isValid) {
-    return actionResult_('INVALID_TARGET', operation, sourceId, target, '', '', '', targetPlan.error);
+    return enrichPipelineActionResult_(actionResult_('INVALID_TARGET', operation, sourceId, target, '', '', '', targetPlan.error), finalSourceLabel, source, finalSourcePath);
   }
 
   if (operation === 'RENAME') {
     if (source.objectName === targetPlan.objectName) {
-      return actionResult_('SKIP_ALREADY_AT_TARGET', operation, sourceId, target, source.parentId, targetPlan.objectName, '', 'The object already has the requested name.');
+      return enrichPipelineActionResult_(actionResult_('SKIP_ALREADY_AT_TARGET', operation, sourceId, target, source.parentId, targetPlan.objectName, '', 'The object already has the requested name.'), finalSourceLabel, source, finalSourcePath);
     }
 
-    return actionResult_(
+    return enrichPipelineActionResult_(actionResult_(
       'READY',
       operation,
       sourceId,
@@ -187,7 +234,7 @@ function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
       targetPlan.objectName,
       '',
       'Dry-run only. RENAME ' + source.objectType + ' "' + source.objectName + '" to "' + targetPlan.objectName + '". Row ' + rowNumber + '.'
-    );
+    ), finalSourceLabel, source, finalSourcePath);
   }
 
   var parentResult = resolveFolderFromRootId_(rootId, targetPlan.parentPath, CacheService.getScriptCache());
@@ -200,13 +247,13 @@ function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
   );
 
   if (targetLookup.found && targetLookup.objectId === sourceId) {
-    return actionResult_('SKIP_ALREADY_AT_TARGET', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', 'The object is already at the requested target.');
+    return enrichPipelineActionResult_(actionResult_('SKIP_ALREADY_AT_TARGET', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', 'The object is already at the requested target.'), finalSourceLabel, source, finalSourcePath);
   }
   if (targetLookup.found && targetLookup.objectId !== sourceId) {
-    return actionResult_('TARGET_OBJECT_CONFLICT', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', 'Another object already exists at the target path.');
+    return enrichPipelineActionResult_(actionResult_('TARGET_OBJECT_CONFLICT', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', 'Another object already exists at the target path.'), finalSourceLabel, source, finalSourcePath);
   }
   if (targetLookup.error === 'AMBIGUOUS_FILE_NAME' || targetLookup.error === 'AMBIGUOUS_FOLDER_NAME') {
-    return actionResult_('AMBIGUOUS_TARGET_OBJECT', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', targetLookup.error);
+    return enrichPipelineActionResult_(actionResult_('AMBIGUOUS_TARGET_OBJECT', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', targetLookup.error), finalSourceLabel, source, finalSourcePath);
   }
 
   if (
@@ -214,7 +261,7 @@ function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
     source.parentId === targetParentId &&
     source.objectName === targetPlan.objectName
   ) {
-    return actionResult_('SKIP_ALREADY_AT_TARGET', operation, sourceId, target, targetParentId, targetPlan.objectName, '', 'The object is already in the requested parent with the requested name.');
+    return enrichPipelineActionResult_(actionResult_('SKIP_ALREADY_AT_TARGET', operation, sourceId, target, targetParentId, targetPlan.objectName, '', 'The object is already in the requested parent with the requested name.'), finalSourceLabel, source, finalSourcePath);
   }
 
   var status = parentResult.exists ? 'READY' : 'READY_CREATE_TARGET_PARENT';
@@ -233,7 +280,47 @@ function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
   }
   note += ' Row ' + rowNumber + '.';
 
-  return actionResult_(status, operation, sourceId, target, targetParentId, targetPlan.objectName, cleanup, note);
+  return enrichPipelineActionResult_(actionResult_(status, operation, sourceId, target, targetParentId, targetPlan.objectName, cleanup, note), finalSourceLabel, source, finalSourcePath);
+}
+
+
+function resolveFinalSourceLabel_(sharedSourceLabel, resolveStatus, resolvedId, sourceId, primarySourceId) {
+  if (sharedSourceLabel === 'RESOLVE' || sharedSourceLabel === 'VERIFY') {
+    return sharedSourceLabel;
+  }
+
+  if (resolveStatus === 'FOUND_SINGLE' && resolvedId && sourceId === resolvedId) {
+    return 'RESOLVE';
+  }
+
+  return primarySourceId ? 'VERIFY' : (sourceId ? 'RESOLVE' : '');
+}
+
+function buildFinalSourcePath_(sharedSourcePath, sharedObjectName, source) {
+  var parentPath = String(sharedSourcePath || '').trim().replace(/[\\/]+$/g, '');
+  var objectName = String(sharedObjectName || '').trim().replace(/^[\\/]+/g, '');
+
+  if (parentPath && objectName) return parentPath + '\\' + objectName;
+  if (parentPath) return parentPath;
+  if (objectName) return objectName;
+  return source && source.objectPath ? source.objectPath : '';
+}
+
+
+function isAmbiguousResolveStatus_(status, matchCount) {
+  if (status === 'NEEDS_HUMAN_INPUT') return matchCount > 0;
+  return status === 'AMBIGUOUS' ||
+    status === 'FOUND_MULTIPLE' ||
+    status === 'MULTIPLE_MATCHES';
+}
+
+function isNotFoundResolveStatus_(status, matchCount) {
+  if (status === 'NEEDS_HUMAN_INPUT' && matchCount === 0) return true;
+  return status === 'NOT_FOUND' ||
+    status === 'SOURCE_NOT_FOUND' ||
+    status === 'NO_MATCH' ||
+    status === 'UNRESOLVED' ||
+    status === 'ERROR';
 }
 
 function getActionCell_(row, column) {
@@ -241,6 +328,23 @@ function getActionCell_(row, column) {
 }
 
 function actionResult_(status, operation, sourceId, target, targetParentId, targetObjectName, cleanup, note) {
+  var pipelineStatus = '';
+  var finalPhase = '';
+
+  if (status === 'NEEDS_HUMAN_INPUT') {
+    pipelineStatus = 'NEEDS_HUMAN_INPUT';
+    finalPhase = 'RESOLVE';
+  } else if (status === 'SOURCE_NOT_FOUND' || status === 'MISSING_SOURCE_OBJECT_ID') {
+    pipelineStatus = status;
+    finalPhase = 'RESOLVE';
+  } else if (status === 'MISSING_OPERATION' || status === 'MISSING_TARGET') {
+    pipelineStatus = status;
+    finalPhase = 'ACTION_PREVIEW';
+  } else if (status) {
+    pipelineStatus = status;
+    finalPhase = 'ACTION_PREVIEW';
+  }
+
   return {
     OperationStatus: status || '',
     Operation: operation || '',
@@ -249,6 +353,23 @@ function actionResult_(status, operation, sourceId, target, targetParentId, targ
     TargetParentID: targetParentId || '',
     TargetObjectName: targetObjectName || '',
     CleanupCandidate: cleanup || '',
-    OperationNote: note || ''
+    OperationNote: note || '',
+    PipelineStatus: pipelineStatus,
+    FinalSource: '',
+    FinalSourceObjectID: sourceId || '',
+    FinalSourceType: '',
+    FinalSourcePath: '',
+    FinalPhase: finalPhase,
+    PipelineNote: note || ''
   };
+}
+
+
+function enrichPipelineActionResult_(result, finalSourceLabel, source, finalSourcePath) {
+  if (!result) return result;
+  result.FinalSource = finalSourceLabel || '';
+  result.FinalSourceObjectID = result.SourceObjectID || '';
+  result.FinalSourceType = source && source.objectType ? source.objectType : '';
+  result.FinalSourcePath = finalSourcePath || (source && source.objectPath ? source.objectPath : '');
+  return result;
 }
