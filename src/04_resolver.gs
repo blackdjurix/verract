@@ -209,6 +209,7 @@ function verifyFileAcrossCandidatePaths_(
   var normalizedFilename = filename
     ? filename.toString().trim()
     : '';
+
   if (!normalizedRootId) {
     return buildVerifyFileResult_(
       false,
@@ -221,6 +222,7 @@ function verifyFileAcrossCandidatePaths_(
       'Missing RootID.'
     );
   }
+
   if (!normalizedFilename) {
     return buildVerifyFileResult_(
       false,
@@ -233,10 +235,12 @@ function verifyFileAcrossCandidatePaths_(
       'Missing filename.'
     );
   }
+
   var uniqueCandidatePaths =
     deduplicateCandidatePaths_(
       candidatePaths
     );
+
   if (
     uniqueCandidatePaths.length === 0
   ) {
@@ -251,9 +255,11 @@ function verifyFileAcrossCandidatePaths_(
       'Missing candidate path.'
     );
   }
+
   var checkedPathCount = 0;
   var firstValidPathMiss = null;
   var firstMissingPathError = '';
+
   for (
     var i = 0;
     i < uniqueCandidatePaths.length;
@@ -261,7 +267,9 @@ function verifyFileAcrossCandidatePaths_(
   ) {
     var candidatePath =
       uniqueCandidatePaths[i];
+
     checkedPathCount++;
+
     var result =
       verifyFileAtCandidatePath_(
         normalizedRootId,
@@ -269,6 +277,7 @@ function verifyFileAcrossCandidatePaths_(
         normalizedFilename,
         scriptCache
       );
+
     if (result.exists) {
       return buildVerifyFileResult_(
         true,
@@ -281,6 +290,7 @@ function verifyFileAcrossCandidatePaths_(
         ''
       );
     }
+
     if (
       !firstValidPathMiss &&
       result.pathId
@@ -297,6 +307,7 @@ function verifyFileAcrossCandidatePaths_(
           candidatePath.columnLetter
       };
     }
+
     if (
       !firstMissingPathError &&
       result.error
@@ -305,6 +316,7 @@ function verifyFileAcrossCandidatePaths_(
         result.error;
     }
   }
+
   if (firstValidPathMiss) {
     return buildVerifyFileResult_(
       false,
@@ -317,6 +329,7 @@ function verifyFileAcrossCandidatePaths_(
       'Path found, but file not found.'
     );
   }
+
   return buildVerifyFileResult_(
     false,
     '',
@@ -387,6 +400,7 @@ function verifyFileAtCandidatePath_(
     normalizePathForTraversal_(
       candidatePath
     );
+
   if (!normalizedPath) {
     return {
       exists: false,
@@ -397,12 +411,14 @@ function verifyFileAtCandidatePath_(
       error: 'Missing path.'
     };
   }
+
   var folderResult =
     resolveFolderFromRootId_(
       rootId,
       normalizedPath,
       scriptCache
     );
+
   if (!folderResult.exists) {
     return {
       exists: false,
@@ -413,25 +429,25 @@ function verifyFileAtCandidatePath_(
       error: folderResult.error
     };
   }
-  var files =
-    folderResult.folder
-      .getFilesByName(filename);
-  if (files.hasNext()) {
-    var file = files.next();
+
+  var fileResolution = resolveDriveObjectId_(
+    rootId,
+    joinPathAndFilename_(normalizedPath, filename),
+    'file',
+    scriptCache
+  );
+
+  if (fileResolution.found) {
     return {
       exists: true,
-      fileId: file.getId(),
-      fileType: 'file',
-      pathId:
-        folderResult.folder.getId(),
-      verifiedFilePath:
-        joinPathAndFilename_(
-          normalizedPath,
-          filename
-        ),
+      fileId: fileResolution.objectId,
+      fileType: fileResolution.objectType,
+      pathId: fileResolution.parentId,
+      verifiedFilePath: joinPathAndFilename_(normalizedPath, filename),
       error: ''
     };
   }
+
   if (
     isLikelySameObjectName_(
       getLeafSegmentFromPath_(
@@ -441,17 +457,18 @@ function verifyFileAtCandidatePath_(
     )
   ) {
     return {
-      exists: false,
-      type: 'folder',
-      fileId: '',
+      exists: true,
+      fileId:
+        folderResult.folder.getId(),
+      fileType: 'folder',
       pathId:
         folderResult.folder.getId(),
       verifiedFilePath:
         normalizedPath,
-      error:
-        'Path found, but file not found.'
+      error: ''
     };
   }
+
   return {
     exists: false,
     fileId: '',
@@ -472,11 +489,14 @@ function getLeafSegmentFromPath_(
     normalizePathForTraversal_(
       pathValue
     );
+
   if (!normalizedPath) {
     return '';
   }
+
   var segments =
     normalizedPath.split('\\');
+
   return segments.length
     ? segments[segments.length - 1]
     : '';
@@ -490,28 +510,34 @@ function isLikelySameObjectName_(
     tokenizeObjectName_(
       candidateName
     );
+
   var filenameTokens =
     tokenizeObjectName_(
       stripExtensionFromName_(
         filename
       )
     );
+
   if (
     candidateTokens.length === 0 ||
     filenameTokens.length === 0
   ) {
     return false;
   }
+
   var candidateKey =
     candidateTokens.join('|');
   var filenameKey =
     filenameTokens.join('|');
+
   if (candidateKey === filenameKey) {
     return true;
   }
+
   var candidateMap = {};
   var filenameMap = {};
   var sharedCount = 0;
+
   for (
     var i = 0;
     i < candidateTokens.length;
@@ -521,6 +547,7 @@ function isLikelySameObjectName_(
       candidateTokens[i]
     ] = true;
   }
+
   for (
     var j = 0;
     j < filenameTokens.length;
@@ -530,17 +557,20 @@ function isLikelySameObjectName_(
       filenameTokens[j]
     ] = true;
   }
+
   for (var key in candidateMap) {
     if (filenameMap[key]) {
       sharedCount++;
     }
   }
+
   var candidateCoverage =
     sharedCount /
     Object.keys(candidateMap).length;
   var filenameCoverage =
     sharedCount /
     Object.keys(filenameMap).length;
+
   return (
     sharedCount >= 3 &&
     candidateCoverage >= 0.85 &&
@@ -554,34 +584,43 @@ function tokenizeObjectName_(
   var text = value
     ? value.toString().toLowerCase()
     : '';
+
   text =
     stripExtensionFromName_(
       text
     );
+
   text = text
     .replace(/[_\-]+/g, ' ')
     .replace(/[^\w]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
   if (!text) {
     return [];
   }
+
   var parts = text.split(' ');
   var seen = {};
   var tokens = [];
+
   for (
     var i = 0;
     i < parts.length;
     i++
   ) {
     var part = parts[i].trim();
+
     if (!part || seen[part]) {
       continue;
     }
+
     seen[part] = true;
     tokens.push(part);
   }
+
   tokens.sort();
+
   return tokens;
 }
 
@@ -591,6 +630,7 @@ function stripExtensionFromName_(
   var text = value
     ? value.toString().trim()
     : '';
+
   return text.replace(
     /\.[^.\s\\\/]+$/,
     ''

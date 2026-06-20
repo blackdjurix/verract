@@ -105,7 +105,7 @@
   <body>
     <div class="topbar">
       <h1>verract</h1>
-      <div class="version">v0.3.4 · status-uppercase-fix</div>
+      <div class="version">v0.4.0 · action foundation</div>
     </div>
 
     <div id="homeView" class="view active">
@@ -133,6 +133,8 @@
         <div class="section-title">Workflow</div>
         <button class="nav" id="openVerifyButton" type="button">⏰ Verify</button>
         <button class="nav" id="openResolveButton" type="button">🔎 Resolve</button>
+        <button class="nav" id="openActionButton" type="button">🧭 Action Preview</button>
+        <button class="nav" id="runPipelineButton" type="button">🔗 Multi-Phase Preview</button>
       </div>
 
       <div class="section">
@@ -260,11 +262,72 @@
       <div class="message" id="resolveMessage">Ready.</div>
     </div>
 
+
+    <div id="actionView" class="view">
+      <div class="button-row">
+        <button id="backFromActionButton" type="button">← Home</button>
+        <button id="goVerifyFromActionButton" type="button">Go Verify →</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Status</div>
+        <div class="status-row"><div class="label">Engine</div><div class="value" id="actionStatus">-</div></div>
+        <div class="status-row"><div class="label">Mode</div><div class="value" id="actionMode">-</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Selection</div>
+        <div class="status-row"><div class="label">Sheet</div><div class="value" id="actionSelectionSheet">-</div></div>
+        <div class="status-row"><div class="label">Range</div><div class="value" id="actionSelectionRange">-</div></div>
+        <div class="status-row"><div class="label">Rows</div><div class="value" id="actionSelectionRows">-</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Action Config</div>
+        <div class="grid-2">
+          <div><label>Source ObjectID Column</label><input id="actionSourceObjectIdColumn" value="R" placeholder="R"></div>
+          <div><label>Operation Column</label><input id="actionOperationColumn" value="AE" placeholder="AE"></div>
+        </div>
+        <div class="grid-2">
+          <div><label>Target Column</label><input id="actionTargetColumn" value="G" placeholder="full target object path"></div>
+          <div><label>RootID Column</label><input id="actionRootIdColumn" value="C" placeholder="C"></div>
+        </div>
+        <div class="grid-2">
+          <div><label>Batch Size</label><input id="actionBatchSize" value="50" type="number" min="1"></div>
+          <div><label>Trigger Gap</label><input id="actionTriggerGap" value="5" type="number" min="5"></div>
+        </div>
+        <div class="hint">Input model: ObjectID + Operation + full Target path. Use a helper column when choosing between FileID and PathID.</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Action Output</div>
+        <div class="mapping-tools">
+          <button type="button" data-action="select-all" data-group="action">Select All</button>
+          <button type="button" data-action="clear-all" data-group="action">Clear All</button>
+        </div>
+        <div id="actionMapping"></div>
+      </div>
+
+      <button class="primary" id="runActionButton" type="button">Run Action Preview</button>
+      <div class="message" id="actionMessage">Ready. Dry-run only.</div>
+    </div>
+
     <script>
       var currentSelection = null;
       var pollingTimer = null;
       var localRunMode = '';
       var localRunUntil = 0;
+
+      var actionFields = [
+        ['OperationStatus', 'OperationStatus'],
+        ['Operation', 'Operation'],
+        ['SourceObjectID', 'SourceObjectID'],
+        ['Target', 'Target'],
+        ['TargetParentID', 'TargetParentID'],
+        ['TargetObjectName', 'TargetObjectName'],
+        ['CleanupCandidate', 'CleanupCandidate'],
+        ['OperationNote', 'OperationNote']
+      ];
 
       var verifyFields = [
         ['Exists', 'Exists'],
@@ -334,6 +397,7 @@
       function setupMappingUi() {
         createMappingRows('verifyMapping', 'verify', verifyFields);
         createMappingRows('resolveMapping', 'resolve', resolveFields);
+        createMappingRows('actionMapping', 'action', actionFields);
         createMappingRows('verifySharedMapping', 'shared', sharedFields);
         createMappingRows('resolveSharedMapping', 'shared', sharedFields);
 
@@ -356,6 +420,10 @@
           '#resolveFileColumn',
           '#resolveExtensionColumn',
           '#resolveRootIdColumn',
+          '#actionSourceObjectIdColumn',
+          '#actionOperationColumn',
+          '#actionTargetColumn',
+          '#actionRootIdColumn',
           '[data-map-column]'
         ];
 
@@ -452,6 +520,7 @@
             setMapping('verify', settings.verify || {});
             setMapping('resolve', settings.resolve || {});
             setMapping('shared', settings.shared || {});
+            setMapping('action', settings.action || {});
           })
           .GET_VERRACT_OUTPUT_MAPPING_SETTINGS();
       }
@@ -528,6 +597,7 @@
         renderSelection('home', currentSelection);
         renderSelection('verify', currentSelection);
         renderSelection('resolve', currentSelection);
+        renderSelection('action', currentSelection);
       }
 
       function attachSelection(config) {
@@ -568,9 +638,31 @@
         });
       }
 
+      function buildActionConfig() {
+        return attachSelection({
+          sourceObjectIdColumn: columnValueOf('actionSourceObjectIdColumn'),
+          operationColumn: columnValueOf('actionOperationColumn'),
+          targetColumn: columnValueOf('actionTargetColumn'),
+          rootIdColumn: columnValueOf('actionRootIdColumn'),
+          batchSize: valueOf('actionBatchSize'),
+          triggerGapMinutes: valueOf('actionTriggerGap'),
+          actionOutputMapping: getMapping('action')
+        });
+      }
+
+      function buildPipelineConfig() {
+        return {
+          verify: buildVerifyConfig(),
+          resolve: buildResolveConfig(),
+          action: buildActionConfig()
+        };
+      }
+
       function setBusy(isBusy) {
         byId('runVerifyButton').disabled = isBusy;
         byId('runResolveButton').disabled = isBusy;
+        byId('runActionButton').disabled = isBusy;
+        byId('runPipelineButton').disabled = isBusy;
       }
 
       function setLocalRunningStatus(mode) {
@@ -601,6 +693,8 @@
         setText('verifyMode', status.mode);
         setText('resolveStatus', status.status);
         setText('resolveMode', status.mode);
+        setText('actionStatus', status.status);
+        setText('actionMode', status.mode);
       }
 
       function runVerify() {
@@ -645,6 +739,48 @@
             setMessage('resolveMessage', err && err.message ? err.message : 'Failed to start Resolve.');
           })
           .START_RESOLVE_FROM_SIDEBAR(config);
+      }
+
+      function runAction() {
+        var config;
+        try { config = buildActionConfig(); }
+        catch (err) { setMessage('actionMessage', err.message); return; }
+        setBusy(true);
+        setMessage('actionMessage', 'Starting Action Preview...');
+        setLocalRunningStatus('ACTION_PREVIEW');
+        startPolling();
+        google.script.run
+          .withSuccessHandler(function(result) {
+            setBusy(false);
+            setMessage('actionMessage', result && result.message ? result.message : 'Action Preview started.');
+            refreshStatus();
+          })
+          .withFailureHandler(function(err) {
+            setBusy(false);
+            setMessage('actionMessage', err && err.message ? err.message : 'Failed to start Action Preview.');
+          })
+          .START_ACTION_FROM_SIDEBAR(config);
+      }
+
+      function runPipeline() {
+        var config;
+        try { config = buildPipelineConfig(); }
+        catch (err) { setMessage('homeMessage', err.message); return; }
+        setBusy(true);
+        setMessage('homeMessage', 'Starting Verify → Resolve → Action Preview...');
+        setLocalRunningStatus('PIPELINE:VERIFY');
+        startPolling();
+        google.script.run
+          .withSuccessHandler(function(result) {
+            setBusy(false);
+            setMessage('homeMessage', result && result.message ? result.message : 'Multi-Phase Preview started.');
+            refreshStatus();
+          })
+          .withFailureHandler(function(err) {
+            setBusy(false);
+            setMessage('homeMessage', err && err.message ? err.message : 'Failed to start Multi-Phase Preview.');
+          })
+          .START_MULTI_PHASE_FROM_SIDEBAR(config);
       }
 
       function refreshStatus() {
@@ -726,8 +862,12 @@
         byId('clearSelectionButton').addEventListener('click', clearSelection);
         byId('openVerifyButton').addEventListener('click', function() { showView('verifyView'); });
         byId('openResolveButton').addEventListener('click', function() { showView('resolveView'); });
+        byId('openActionButton').addEventListener('click', function() { showView('actionView'); });
+        byId('runPipelineButton').addEventListener('click', runPipeline);
         byId('backFromVerifyButton').addEventListener('click', function() { showView('homeView'); });
         byId('backFromResolveButton').addEventListener('click', function() { showView('homeView'); });
+        byId('backFromActionButton').addEventListener('click', function() { showView('homeView'); });
+        byId('goVerifyFromActionButton').addEventListener('click', function() { showView('verifyView'); });
         byId('goResolveFromVerifyButton').addEventListener('click', function() { showView('resolveView'); });
         byId('goVerifyFromResolveButton').addEventListener('click', function() { showView('verifyView'); });
         byId('refreshStatusButton').addEventListener('click', refreshStatus);
@@ -735,6 +875,7 @@
         byId('stopButton').addEventListener('click', stopVerract);
         byId('runVerifyButton').addEventListener('click', runVerify);
         byId('runResolveButton').addEventListener('click', runResolve);
+        byId('runActionButton').addEventListener('click', runAction);
 
         var toolButtons = document.querySelectorAll('[data-action]');
         for (var i = 0; i < toolButtons.length; i++) {

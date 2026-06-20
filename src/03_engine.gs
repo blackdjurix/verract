@@ -832,7 +832,7 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
         'Engine metadata incomplete.'
       );
     } if (currentRow > endRow) {
-      CLEAR_TRIGGER_AND_STATE();
+      if (!advanceMultiPhasePipeline_('VERIFY')) { CLEAR_TRIGGER_AND_STATE(); }
       SpreadsheetApp
         .openById(spreadsheetId)
         .toast(
@@ -1027,7 +1027,7 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
       Date.now().toString()
     );
     if (nextRow > endRow) {
-      CLEAR_TRIGGER_AND_STATE();
+      if (!advanceMultiPhasePipeline_('VERIFY')) { CLEAR_TRIGGER_AND_STATE(); }
       SpreadsheetApp
         .openById(spreadsheetId)
         .toast(
@@ -1042,4 +1042,86 @@ function TRIGGER_BATCH_AUDIT_MULTI() {
       props
     );
   }
+}
+
+/**
+ * Multi-phase orchestration foundation.
+ * Runs Verify -> Resolve -> Action Preview using persisted phase configs.
+ */
+function CREATE_MULTI_PHASE_PIPELINE() {
+  throw new Error('Open the verract Control Panel and start Multi-Phase Preview from Home.');
+}
+
+function startMultiPhasePipeline_(config) {
+  if (!config || !config.verify || !config.resolve || !config.action) {
+    throw new Error('Verify, Resolve, and Action configs are required.');
+  }
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty(ENGINE_STATE_KEY) === 'TRUE') throw new Error('Automation masih aktif.');
+
+  props.setProperties({
+    PIPELINE_ENABLED: 'TRUE',
+    PIPELINE_PHASE: 'VERIFY',
+    PIPELINE_VERIFY_CONFIG: JSON.stringify(config.verify),
+    PIPELINE_RESOLVE_CONFIG: JSON.stringify(config.resolve),
+    PIPELINE_ACTION_CONFIG: JSON.stringify(config.action),
+    PIPELINE_STARTED_AT: Date.now().toString()
+  });
+  return startVerifyAutomation_(config.verify);
+}
+
+function advanceMultiPhasePipeline_(completedPhase) {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('PIPELINE_ENABLED') !== 'TRUE') return false;
+
+  var nextPhase = completedPhase === 'VERIFY'
+    ? 'RESOLVE'
+    : completedPhase === 'RESOLVE'
+      ? 'ACTION_PREVIEW'
+      : 'COMPLETE';
+
+  props.setProperty('PIPELINE_PHASE', nextPhase);
+  deleteExistingTriggers_();
+  props.setProperty(ENGINE_STATE_KEY, 'FALSE');
+  clearPhaseStateOnly_(completedPhase, props);
+
+  if (nextPhase === 'COMPLETE') {
+    CLEAR_TRIGGER_AND_STATE();
+    return true;
+  }
+
+  ScriptApp.newTrigger('TRIGGER_MULTI_PHASE_TRANSITION')
+    .timeBased()
+    .after(1000)
+    .create();
+  return true;
+}
+
+function TRIGGER_MULTI_PHASE_TRANSITION() {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return;
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var phase = props.getProperty('PIPELINE_PHASE');
+    deleteExistingTriggers_();
+
+    if (phase === 'RESOLVE') {
+      var resolveConfig = JSON.parse(props.getProperty('PIPELINE_RESOLVE_CONFIG') || '{}');
+      startResolveAutomation_(resolveConfig);
+      return;
+    }
+    if (phase === 'ACTION_PREVIEW') {
+      var actionConfig = JSON.parse(props.getProperty('PIPELINE_ACTION_CONFIG') || '{}');
+      startActionPreviewAutomation_(actionConfig);
+      return;
+    }
+    CLEAR_TRIGGER_AND_STATE();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function clearPhaseStateOnly_(phase, props) {
+  var keys = phase === 'VERIFY' ? METADATA_KEYS : phase === 'RESOLVE' ? RESOLVE_METADATA_KEYS : ACTION_METADATA_KEYS;
+  keys.forEach(function(key) { props.deleteProperty(key); });
 }

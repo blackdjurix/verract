@@ -1,5 +1,60 @@
 # Changelog
 
+<details open>
+<summary><strong>v0.4.0 - Object-Based Action Preview Foundation</strong></summary>
+
+### Added
+
+- Added an Action Preview phase driven by:
+  - `SourceObjectID`
+  - `Operation`
+  - `Target`
+  - `RootID`
+- Added generic Drive-object inspection for both files and folders.
+- Added dry-run planning for:
+  - `MOVE`
+  - `COPY`
+  - `RENAME`
+  - `MOVE_RENAME`
+  - `DELETE`
+- Added target-parent planning when the destination path does not yet exist.
+- Added target-object conflict detection.
+- Added already-at-target detection.
+- Added duplicate source-reference detection.
+- Added cleanup-candidate planning for MOVE operations.
+
+### Changed
+
+- Reframed Action input around Drive objects instead of separate file-only or folder-only workflows.
+- File targets are now interpreted as destination parent paths.
+- Folder targets are now interpreted as final folder paths.
+- Folder MOVE and COPY automatically include an internal rename step when the source name differs from the target leaf name.
+- COPY now allows one source object to fan out to multiple different targets.
+- MOVE continues to block one source object from being assigned to conflicting targets.
+- Shared Drive-object resolution and inspection helpers are used by Action planning.
+
+### Validation
+
+The following dry-run scenarios were tested:
+
+- MOVE file to a new target parent path.
+- COPY file to a new target parent path.
+- MOVE folder with automatic rename.
+- COPY folder with automatic rename.
+- COPY folder from one source to multiple targets.
+- MOVE folder conflict when one source points to multiple targets.
+- Already-at-target detection.
+- Missing source ObjectID handling.
+- Verify and Resolve results feeding Action source IDs.
+
+### Notes
+
+- Action remains preview-only in v0.4.0.
+- No Drive file or folder is moved, copied, renamed, or deleted yet.
+- Execution, rollback, partial-success handling, and post-action cleanup remain future work.
+
+</details>
+
 <details>
 <summary><strong>v0.3.4 - Shared Output & HTML Workflow</strong></summary>
 

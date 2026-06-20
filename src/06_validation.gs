@@ -1000,3 +1000,46 @@ function getMappedValue_(
     ? ''
     : rowObject[field];
 }
+
+
+function normalizeActionConfig_(config) {
+  if (!config) throw new Error('Action config is required.');
+
+  var normalized = {
+    spreadsheetId: String(config.spreadsheetId || ''),
+    sheetName: String(config.sheetName || ''),
+    startRow: parseInt(config.startRow, 10),
+    endRow: parseInt(config.endRow, 10),
+    sourceObjectIdColumn: normalizeRequiredColumn_(config.sourceObjectIdColumn),
+    operationColumn: normalizeRequiredColumn_(config.operationColumn),
+    targetColumn: normalizeRequiredColumn_(config.targetColumn),
+    rootIdColumn: normalizeRequiredColumn_(config.rootIdColumn),
+    batchSize: parseInt(config.batchSize || ACTION_DEFAULT_BATCH_SIZE, 10),
+    triggerGapMinutes: parseInt(config.triggerGapMinutes || ACTION_DEFAULT_TRIGGER_GAP_MINUTES, 10),
+    outputMapping: normalizeOutputMapping_(config.actionOutputMapping || config.outputMapping || {}, ACTION_OUTPUT_FIELDS)
+  };
+
+  if (!normalized.spreadsheetId || !normalized.sheetName) throw new Error('Action spreadsheet/sheet context is required.');
+  if (isNaN(normalized.startRow) || isNaN(normalized.endRow) || normalized.startRow < 1 || normalized.endRow < normalized.startRow) {
+    throw new Error('Action row range is invalid.');
+  }
+  normalized.batchSize = Math.max(ACTION_MIN_BATCH_SIZE, Math.min(ACTION_MAX_BATCH_SIZE, normalized.batchSize));
+  normalized.triggerGapMinutes = Math.max(ACTION_MIN_TRIGGER_GAP_MINUTES, Math.min(ACTION_MAX_TRIGGER_GAP_MINUTES, normalized.triggerGapMinutes));
+
+  validateOutputMapping_(normalized.outputMapping, ACTION_OUTPUT_FIELDS, 'Action');
+  return normalized;
+}
+
+function normalizeActionOperation_(value) {
+  var normalized = String(value || '').trim().toUpperCase().replace(/[\s&-]+/g, '_').replace(/_+/g, '_');
+  var aliases = {
+    MOVE_OBJECT: 'MOVE',
+    COPY_OBJECT: 'COPY',
+    RENAME_OBJECT: 'RENAME',
+    MOVE_RENAME_OBJECT: 'MOVE_RENAME',
+    MOVE_AND_RENAME: 'MOVE_RENAME',
+    DELETE_OBJECT: 'DELETE'
+  };
+  normalized = aliases[normalized] || normalized;
+  return ACTION_SUPPORTED_OPERATIONS.indexOf(normalized) === -1 ? '' : normalized;
+}
