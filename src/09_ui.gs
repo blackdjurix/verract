@@ -140,6 +140,11 @@ function GET_VERRACT_OUTPUT_MAPPING_SETTINGS() {
       loadSidebarOutputMapping_(
         SHARED_OUTPUT_MAPPING_PROPERTY,
         SHARED_OUTPUT_FIELDS
+      ),
+    action:
+      loadSidebarOutputMapping_(
+        'ACTION_OUTPUT_MAPPING',
+        ACTION_OUTPUT_FIELDS
       )
   };
 }
@@ -610,4 +615,19 @@ function convertOutputMappingToLetters_(
   }
 
   return result;
+}
+
+
+function START_ACTION_FROM_SIDEBAR(config) {
+  var normalized = normalizeSidebarConfig_(config || {});
+  var result = startActionPreviewAutomation_(normalized);
+  return result;
+}
+
+function START_MULTI_PHASE_FROM_SIDEBAR(config) {
+  if (!config) throw new Error('Pipeline config is required.');
+  config.verify = normalizeSidebarConfig_(config.verify || {});
+  config.resolve = normalizeSidebarConfig_(config.resolve || {});
+  config.action = normalizeSidebarConfig_(config.action || {});
+  return startMultiPhasePipeline_(config);
 }

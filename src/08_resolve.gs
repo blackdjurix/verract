@@ -635,7 +635,7 @@ function TRIGGER_RESOLVE_BATCH_MULTI() {
       batchSize = RESOLVE_DEFAULT_BATCH_SIZE;
     }
     if (currentRow > endRow) {
-      CLEAR_TRIGGER_AND_STATE();
+      if (!advanceMultiPhasePipeline_('RESOLVE')) { CLEAR_TRIGGER_AND_STATE(); }
       return;
     }
     var rowsToProcess = Math.min(
@@ -647,7 +647,7 @@ function TRIGGER_RESOLVE_BATCH_MULTI() {
     props.setProperty('RESOLVE_CURRENT_ROW', nextRow.toString());
     props.setProperty('RESOLVE_LAST_SUCCESS_TS', Date.now().toString());
     if (nextRow > endRow) {
-      CLEAR_TRIGGER_AND_STATE();
+      if (!advanceMultiPhasePipeline_('RESOLVE')) { CLEAR_TRIGGER_AND_STATE(); }
     }
   } catch (err) {
     handleRuntimeError_(err, props);
@@ -1437,4 +1437,8 @@ function TEST_RESOLVE_SEARCH_RESULT_BUILD() {
       verifyContext
     );
   Logger.log(JSON.stringify(result, null, 2));
+}
+
+function inspectResolvedObject_(objectId) {
+  return inspectDriveObjectById_(objectId);
 }

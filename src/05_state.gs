@@ -110,6 +110,12 @@ function CLEAR_TRIGGER_AND_STATE() {
       props.deleteProperty(key);
     }
   );
+  if (typeof ACTION_METADATA_KEYS !== 'undefined') {
+    ACTION_METADATA_KEYS.forEach(function(key) { props.deleteProperty(key); });
+  }
+  if (typeof PIPELINE_METADATA_KEYS !== 'undefined') {
+    PIPELINE_METADATA_KEYS.forEach(function(key) { props.deleteProperty(key); });
+  }
   props.deleteProperty(
     'AUTO_BACKOFF_UNTIL'
   );

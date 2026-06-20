@@ -144,3 +144,67 @@ var RESOLVE_OUTPUT_MAPPING_PROPERTY =
 
 var SHARED_OUTPUT_MAPPING_PROPERTY =
   'SHARED_OUTPUT_MAPPING';
+
+
+/**
+ * Action Preview v0.4.0
+ * User input: Source ObjectID + Operation + Target.
+ * RootID is operation context for path resolution and single-root guard.
+ */
+var ACTION_OUTPUT_FIELDS = [
+  'OperationStatus',
+  'Operation',
+  'SourceObjectID',
+  'Target',
+  'TargetParentID',
+  'TargetObjectName',
+  'CleanupCandidate',
+  'OperationNote'
+];
+
+var ACTION_OUTPUT_WIDTH = ACTION_OUTPUT_FIELDS.length;
+
+var ACTION_METADATA_KEYS = [
+  'ACTION_CURRENT_ROW',
+  'ACTION_END_ROW',
+  'ACTION_SOURCE_OBJECT_ID_COLUMN',
+  'ACTION_OPERATION_COLUMN',
+  'ACTION_TARGET_COLUMN',
+  'ACTION_ROOT_ID_COLUMN',
+  'ACTION_OUTPUT_MAPPING',
+  'ACTION_SPREADSHEET_ID',
+  'ACTION_SHEET_NAME',
+  'ACTION_BATCH_SIZE',
+  'ACTION_TRIGGER_GAP_MINUTES',
+  'ACTION_LAST_SUCCESS_TS',
+  'ACTION_ENGINE_STARTED_AT'
+];
+
+var ACTION_DEFAULT_BATCH_SIZE = 50;
+var ACTION_MIN_BATCH_SIZE = 1;
+var ACTION_MAX_BATCH_SIZE = 200;
+var ACTION_DEFAULT_TRIGGER_GAP_MINUTES = 5;
+var ACTION_MIN_TRIGGER_GAP_MINUTES = 5;
+var ACTION_MAX_TRIGGER_GAP_MINUTES = 60;
+
+var ACTION_SUPPORTED_OPERATIONS = [
+  'MOVE',
+  'COPY',
+  'RENAME',
+  'MOVE_RENAME',
+  'DELETE'
+];
+
+/**
+ * Multi-phase pipeline foundation.
+ * v0.4.0 ends at Action Preview; Drive mutation stays disabled.
+ */
+var PIPELINE_METADATA_KEYS = [
+  'PIPELINE_ENABLED',
+  'PIPELINE_PHASE',
+  'PIPELINE_VERIFY_CONFIG',
+  'PIPELINE_RESOLVE_CONFIG',
+  'PIPELINE_ACTION_CONFIG',
+  'PIPELINE_STARTED_AT',
+  'PIPELINE_LAST_ERROR'
+];
