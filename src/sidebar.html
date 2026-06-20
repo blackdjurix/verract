@@ -100,6 +100,26 @@
       .mapping-row input[type="checkbox"] { width: auto; margin: 0; }
       .mapping-row input[type="text"] { padding: 5px 6px; }
       .mapping-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+      .remap-preview {
+        margin-top: 8px;
+        max-height: 220px;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: #ffffff;
+      }
+      .remap-item {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--border);
+        font-size: 12px;
+      }
+      .remap-item:last-child { border-bottom: 0; }
+      .remap-path { color: var(--muted); word-break: break-word; }
+      .remap-change { font-weight: 700; white-space: nowrap; }
+      .hidden { display: none; }
     </style>
   </head>
   <body>
@@ -134,7 +154,23 @@
         <button class="nav" id="openVerifyButton" type="button">⏰ Verify</button>
         <button class="nav" id="openResolveButton" type="button">🔎 Resolve</button>
         <button class="nav" id="openActionButton" type="button">🧭 Action Preview</button>
-        <button class="nav" id="runPipelineButton" type="button">🔗 Multi-Phase Preview</button>
+        <button class="nav" id="openPipelineButton" type="button">🔗 Multi-Phase Preview</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Column Mapping Remap</div>
+        <div class="grid-2">
+          <div><label>Moved Column From</label><input id="remapFromColumn" placeholder="AD"></div>
+          <div><label>Moved Column To</label><input id="remapToColumn" placeholder="I"></div>
+        </div>
+        <div class="button-row">
+          <button id="previewRemapButton" type="button">Preview Changes</button>
+          <button class="primary" id="applyRemapButton" type="button" disabled>Apply Remap</button>
+        </div>
+        <button id="undoRemapButton" type="button" disabled>Undo Last Remap</button>
+        <div class="hint">Updates verract UI settings only. The sheet itself is not changed.</div>
+        <div id="remapPreview" class="remap-preview hidden"></div>
+        <div class="message" id="remapMessage">Ready.</div>
       </div>
 
       <div class="section">
@@ -312,11 +348,116 @@
       <div class="message" id="actionMessage">Ready. Dry-run only.</div>
     </div>
 
+    <div id="pipelineView" class="view">
+      <div class="button-row">
+        <button id="backFromPipelineButton" type="button">← Home</button>
+        <button id="goVerifyFromPipelineButton" type="button">Go Verify →</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Status</div>
+        <div class="status-row"><div class="label">Engine</div><div class="value" id="pipelineStatus">-</div></div>
+        <div class="status-row"><div class="label">Mode</div><div class="value" id="pipelineMode">-</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Selection</div>
+        <div class="status-row"><div class="label">Sheet</div><div class="value" id="pipelineSelectionSheet">-</div></div>
+        <div class="status-row"><div class="label">Range</div><div class="value" id="pipelineSelectionRange">-</div></div>
+        <div class="status-row"><div class="label">Rows</div><div class="value" id="pipelineSelectionRows">-</div></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Verify & Resolve Input</div>
+        <label>Path Column(s)</label>
+        <input id="pipelinePathColumns" value="D-G" placeholder="D, D-G, D,E,G">
+        <div class="grid-2">
+          <div><label>File Column</label><input id="pipelineFileColumn" value="H" placeholder="H"></div>
+          <div><label>Extension Column</label><input id="pipelineExtensionColumn" value="" placeholder="optional"></div>
+        </div>
+        <label>RootID Column</label>
+        <input id="pipelineRootIdColumn" value="C" placeholder="C">
+      </div>
+
+      <div class="section">
+        <div class="section-title">Action Input</div>
+        <div class="grid-2">
+          <div><label>Verified SourceObjectID Column</label><input id="pipelineSourceObjectIdColumn" value="R" placeholder="R"></div>
+          <div><label>Operation Column</label><input id="pipelineOperationColumn" value="AE" placeholder="AE"></div>
+        </div>
+        <label>Target Column</label>
+        <input id="pipelineTargetColumn" value="G" placeholder="full target object path">
+        <div class="hint">Verified source remains explicit. Resolve only becomes fallback when this column is empty.</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Engine Config</div>
+        <div class="grid-2">
+          <div><label>Batch Size</label><input id="pipelineBatchSize" value="50" type="number" min="1"></div>
+          <div><label>Trigger Gap</label><input id="pipelineTriggerGap" value="5" type="number" min="5"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Verify Output</div>
+        <div class="mapping-tools">
+          <button type="button" data-action="select-all" data-group="pipelineVerify">Select All</button>
+          <button type="button" data-action="clear-all" data-group="pipelineVerify">Clear All</button>
+        </div>
+        <div id="pipelineVerifyMapping"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Resolve Output</div>
+        <div class="mapping-tools">
+          <button type="button" data-action="select-all" data-group="pipelineResolve">Select All</button>
+          <button type="button" data-action="clear-all" data-group="pipelineResolve">Clear All</button>
+        </div>
+        <div id="pipelineResolveMapping"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Shared Output</div>
+        <div class="mapping-tools">
+          <button type="button" data-action="select-all" data-group="pipelineShared">Select All</button>
+          <button type="button" data-action="clear-all" data-group="pipelineShared">Clear All</button>
+        </div>
+        <div id="pipelineSharedMapping"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Action Output</div>
+        <div class="mapping-tools">
+          <button type="button" data-action="select-all" data-group="pipelineAction">Select All</button>
+          <button type="button" data-action="clear-all" data-group="pipelineAction">Clear All</button>
+        </div>
+        <div id="pipelineActionMapping"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Pipeline Output</div>
+        <div class="mapping-tools">
+          <button type="button" data-action="select-all" data-group="pipeline">Select All</button>
+          <button type="button" data-action="clear-all" data-group="pipeline">Clear All</button>
+        </div>
+        <div id="pipelineMapping"></div>
+      </div>
+
+      <button class="primary" id="runPipelineButton" type="button">Run Multi-Phase Preview</button>
+      <div class="message" id="pipelineMessage">Ready. Dry-run only.</div>
+    </div>
+
     <script>
       var currentSelection = null;
       var pollingTimer = null;
-      var localRunMode = '';
-      var localRunUntil = 0;
+      var startRequestPending = false;
+      var mappingsReady = false;
+      var pendingRemap = null;
+      var lastRemapSnapshot = null;
+      var uiSettingsReady = false;
+      var engineRunning = false;
+      var uiAutoSaveTimer = null;
+      var isApplyingUiSettings = false;
 
       var actionFields = [
         ['OperationStatus', 'OperationStatus'],
@@ -355,8 +496,18 @@
         ['SharedPathID', 'PathID'],
         ['SharedFileID', 'FileID'],
         ['SharedPath', 'Path'],
-        ['SharedFilename', 'Filename'],
+        ['SharedFilename', 'ObjectName'],
         ['SharedSource', 'Source']
+      ];
+
+      var pipelineFields = [
+        ['PipelineStatus', 'PipelineStatus'],
+        ['FinalSource', 'FinalSource'],
+        ['FinalSourceObjectID', 'FinalSourceObjectID'],
+        ['FinalSourceType', 'FinalSourceType'],
+        ['FinalSourcePath', 'FinalSourcePath'],
+        ['FinalPhase', 'FinalPhase'],
+        ['PipelineNote', 'PipelineNote']
       ];
 
       function byId(id) { return document.getElementById(id); }
@@ -394,20 +545,101 @@
         }
       }
 
+      var linkedInputGroups = [
+        ['verifyPathColumns', 'resolvePathColumns', 'pipelinePathColumns'],
+        ['verifyFileColumn', 'resolveFileColumn', 'pipelineFileColumn'],
+        ['verifyExtensionColumn', 'resolveExtensionColumn', 'pipelineExtensionColumn'],
+        ['verifyRootIdColumn', 'resolveRootIdColumn', 'actionRootIdColumn', 'pipelineRootIdColumn'],
+        ['actionSourceObjectIdColumn', 'pipelineSourceObjectIdColumn'],
+        ['actionOperationColumn', 'pipelineOperationColumn'],
+        ['actionTargetColumn', 'pipelineTargetColumn']
+      ];
+
+      var linkedMappingGroups = {
+        verify: ['verify', 'pipelineVerify'],
+        pipelineVerify: ['verify', 'pipelineVerify'],
+        resolve: ['resolve', 'pipelineResolve'],
+        pipelineResolve: ['resolve', 'pipelineResolve'],
+        shared: ['shared', 'pipelineShared'],
+        pipelineShared: ['shared', 'pipelineShared'],
+        action: ['action', 'pipelineAction'],
+        pipelineAction: ['action', 'pipelineAction']
+      };
+
+      function getLinkedMappingGroups(groupName) {
+        return linkedMappingGroups[groupName] || [groupName];
+      }
+
+      function syncLinkedMapping(event) {
+        var source = event.target;
+        var groupName = source.getAttribute('data-map-group') || source.getAttribute('data-map-column');
+        var key = source.getAttribute('data-map-key');
+        if (!groupName || !key) return;
+
+        var groups = getLinkedMappingGroups(groupName);
+        var i;
+        var j;
+
+        if (source.hasAttribute('data-map-group')) {
+          for (i = 0; i < groups.length; i++) {
+            var checkboxes = document.querySelectorAll('[data-map-group="' + groups[i] + '"][data-map-key="' + key + '"]');
+            for (j = 0; j < checkboxes.length; j++) checkboxes[j].checked = source.checked;
+          }
+        }
+
+        if (source.hasAttribute('data-map-column')) {
+          var value = normalizeColumnText(source.value);
+          source.value = value;
+          for (i = 0; i < groups.length; i++) {
+            var inputs = document.querySelectorAll('[data-map-column="' + groups[i] + '"][data-map-key="' + key + '"]');
+            for (j = 0; j < inputs.length; j++) inputs[j].value = value;
+          }
+        }
+
+        scheduleUiSettingsSave_();
+      }
+
+      function bindLinkedMappings() {
+        var controls = document.querySelectorAll('[data-map-group], [data-map-column]');
+        for (var i = 0; i < controls.length; i++) {
+          controls[i].addEventListener('change', syncLinkedMapping);
+          controls[i].addEventListener('input', syncLinkedMapping);
+        }
+      }
+
+      function bindLinkedInputs() {
+        for (var i = 0; i < linkedInputGroups.length; i++) {
+          (function(ids) {
+            for (var j = 0; j < ids.length; j++) {
+              var input = byId(ids[j]);
+              if (!input) continue;
+              input.addEventListener('input', function() {
+                var value = normalizeColumnText(this.value);
+                for (var k = 0; k < ids.length; k++) {
+                  if (ids[k] !== this.id && byId(ids[k])) byId(ids[k]).value = value;
+                }
+                scheduleUiSettingsSave_();
+              });
+            }
+          })(linkedInputGroups[i]);
+        }
+      }
+
       function setupMappingUi() {
         createMappingRows('verifyMapping', 'verify', verifyFields);
         createMappingRows('resolveMapping', 'resolve', resolveFields);
         createMappingRows('actionMapping', 'action', actionFields);
         createMappingRows('verifySharedMapping', 'shared', sharedFields);
         createMappingRows('resolveSharedMapping', 'shared', sharedFields);
+        createMappingRows('pipelineVerifyMapping', 'pipelineVerify', verifyFields);
+        createMappingRows('pipelineResolveMapping', 'pipelineResolve', resolveFields);
+        createMappingRows('pipelineSharedMapping', 'pipelineShared', sharedFields);
+        createMappingRows('pipelineActionMapping', 'pipelineAction', actionFields);
+        createMappingRows('pipelineMapping', 'pipeline', pipelineFields);
 
-        var sharedInputs = document.querySelectorAll('[data-map-column="shared"], [data-map-group="shared"]');
-        for (var i = 0; i < sharedInputs.length; i++) {
-          sharedInputs[i].addEventListener('change', syncSharedMapping);
-          sharedInputs[i].addEventListener('input', syncSharedMapping);
-        }
-
+        bindLinkedMappings();
         bindUppercaseColumnInputs();
+        bindLinkedInputs();
       }
 
       function bindUppercaseColumnInputs() {
@@ -424,6 +656,15 @@
           '#actionOperationColumn',
           '#actionTargetColumn',
           '#actionRootIdColumn',
+          '#remapFromColumn',
+          '#remapToColumn',
+          '#pipelinePathColumns',
+          '#pipelineFileColumn',
+          '#pipelineExtensionColumn',
+          '#pipelineRootIdColumn',
+          '#pipelineSourceObjectIdColumn',
+          '#pipelineOperationColumn',
+          '#pipelineTargetColumn',
           '[data-map-column]'
         ];
 
@@ -472,55 +713,398 @@
         }
       }
 
-      function syncSharedMapping(event) {
-        var source = event.target;
-        var key = source.getAttribute('data-map-key');
-        if (!key) return;
-        if (source.hasAttribute('data-map-group')) {
-          var checked = source.checked;
-          var checkboxes = document.querySelectorAll('[data-map-group="shared"][data-map-key="' + key + '"]');
-          for (var i = 0; i < checkboxes.length; i++) checkboxes[i].checked = checked;
-        }
-        if (source.hasAttribute('data-map-column')) {
-          var value = normalizeColumnText(source.value);
-          source.value = value;
-          var inputs = document.querySelectorAll('[data-map-column="shared"][data-map-key="' + key + '"]');
-          for (var j = 0; j < inputs.length; j++) inputs[j].value = value;
+      function setAllMappingChecks(groupName, checked) {
+        var groups = getLinkedMappingGroups(groupName);
+        for (var i = 0; i < groups.length; i++) {
+          var checkboxes = document.querySelectorAll('[data-map-group="' + groups[i] + '"]');
+          for (var j = 0; j < checkboxes.length; j++) checkboxes[j].checked = checked;
         }
       }
 
       function selectAllMapping(groupName) {
-        var checkboxes = document.querySelectorAll('[data-map-group="' + groupName + '"]');
-        for (var i = 0; i < checkboxes.length; i++) checkboxes[i].checked = true;
-        if (groupName === 'shared') syncAllSharedCheckboxes();
+        setAllMappingChecks(groupName, true);
+        scheduleUiSettingsSave_();
       }
 
       function clearAllMapping(groupName) {
-        var checkboxes = document.querySelectorAll('[data-map-group="' + groupName + '"]');
-        for (var i = 0; i < checkboxes.length; i++) checkboxes[i].checked = false;
-        if (groupName === 'shared') syncAllSharedCheckboxes();
+        setAllMappingChecks(groupName, false);
+        scheduleUiSettingsSave_();
       }
 
-      function syncAllSharedCheckboxes() {
-        var values = {};
-        var checks = document.querySelectorAll('[data-map-group="shared"]');
-        for (var i = 0; i < checks.length; i++) {
-          values[checks[i].getAttribute('data-map-key')] = checks[i].checked;
+
+      function columnLetterToNumber_(letters) {
+        var text = normalizeColumnText(letters);
+        if (!/^[A-Z]+$/.test(text)) throw new Error('Invalid column: ' + letters);
+        var result = 0;
+        for (var i = 0; i < text.length; i++) {
+          result = result * 26 + (text.charCodeAt(i) - 64);
         }
-        for (var key in values) {
-          var same = document.querySelectorAll('[data-map-group="shared"][data-map-key="' + key + '"]');
-          for (var j = 0; j < same.length; j++) same[j].checked = values[key];
+        return result;
+      }
+
+      function columnNumberToLetter_(number) {
+        var n = Number(number);
+        if (!isFinite(n) || n < 1 || Math.floor(n) !== n) throw new Error('Invalid column number: ' + number);
+        var result = '';
+        while (n > 0) {
+          n--;
+          result = String.fromCharCode(65 + (n % 26)) + result;
+          n = Math.floor(n / 26);
         }
+        return result;
+      }
+
+      function remapColumnNumber_(columnNumber, fromNumber, toNumber) {
+        if (columnNumber === fromNumber) return toNumber;
+        if (fromNumber < toNumber && columnNumber > fromNumber && columnNumber <= toNumber) {
+          return columnNumber - 1;
+        }
+        if (fromNumber > toNumber && columnNumber >= toNumber && columnNumber < fromNumber) {
+          return columnNumber + 1;
+        }
+        return columnNumber;
+      }
+
+      function expandColumnExpression_(expression) {
+        var value = normalizeColumnText(expression);
+        if (!value) return [];
+        var result = [];
+        var seen = {};
+        var tokens = value.split(',');
+        for (var i = 0; i < tokens.length; i++) {
+          var token = tokens[i].trim();
+          if (!token) continue;
+          var range = token.split('-');
+          if (range.length === 1) {
+            var single = columnLetterToNumber_(range[0]);
+            if (!seen[single]) { seen[single] = true; result.push(single); }
+            continue;
+          }
+          if (range.length !== 2) throw new Error('Invalid column expression: ' + expression);
+          var start = columnLetterToNumber_(range[0]);
+          var end = columnLetterToNumber_(range[1]);
+          var step = start <= end ? 1 : -1;
+          for (var current = start; ; current += step) {
+            if (!seen[current]) { seen[current] = true; result.push(current); }
+            if (current === end) break;
+          }
+        }
+        return result;
+      }
+
+      function compressColumnNumbers_(numbers) {
+        if (!numbers.length) return '';
+        var unique = {};
+        for (var i = 0; i < numbers.length; i++) unique[numbers[i]] = true;
+        var sorted = Object.keys(unique).map(Number).sort(function(a, b) { return a - b; });
+        var parts = [];
+        var start = sorted[0];
+        var previous = sorted[0];
+        for (var j = 1; j <= sorted.length; j++) {
+          var current = sorted[j];
+          if (j < sorted.length && current === previous + 1) {
+            previous = current;
+            continue;
+          }
+          parts.push(start === previous
+            ? columnNumberToLetter_(start)
+            : columnNumberToLetter_(start) + '-' + columnNumberToLetter_(previous));
+          start = current;
+          previous = current;
+        }
+        return parts.join(',');
+      }
+
+      function remapColumnExpression_(expression, fromNumber, toNumber) {
+        var value = normalizeColumnText(expression);
+        if (!value) return '';
+        var expanded = expandColumnExpression_(value);
+        var remapped = [];
+        for (var i = 0; i < expanded.length; i++) {
+          remapped.push(remapColumnNumber_(expanded[i], fromNumber, toNumber));
+        }
+        return compressColumnNumbers_(remapped);
+      }
+
+      function getPersistedInputIds_() {
+        return [
+          'verifyPathColumns','verifyFileColumn','verifyExtensionColumn','verifyRootIdColumn',
+          'verifyBatchSize','verifyTriggerGap',
+          'resolvePathColumns','resolveFileColumn','resolveExtensionColumn','resolveRootIdColumn',
+          'resolveBatchSize','resolveTriggerGap',
+          'actionSourceObjectIdColumn','actionOperationColumn','actionTargetColumn','actionRootIdColumn',
+          'actionBatchSize','actionTriggerGap',
+          'pipelinePathColumns','pipelineFileColumn','pipelineExtensionColumn','pipelineRootIdColumn',
+          'pipelineSourceObjectIdColumn','pipelineOperationColumn','pipelineTargetColumn',
+          'pipelineBatchSize','pipelineTriggerGap'
+        ];
+      }
+
+      function isColumnSettingInput_(id) {
+        return !/BatchSize$|TriggerGap$/.test(id);
+      }
+
+      function captureUiSnapshot_() {
+        var snapshot = { inputs: {}, mappings: {} };
+        var inputIds = getPersistedInputIds_();
+
+        for (var i = 0; i < inputIds.length; i++) {
+          var id = inputIds[i];
+          var element = byId(id);
+          if (!element) continue;
+          snapshot.inputs[id] = isColumnSettingInput_(id)
+            ? normalizeColumnText(element.value)
+            : element.value.toString().trim();
+        }
+
+        var mapInputs = document.querySelectorAll('[data-map-column]');
+        for (var j = 0; j < mapInputs.length; j++) {
+          var input = mapInputs[j];
+          var group = input.getAttribute('data-map-column');
+          var key = input.getAttribute('data-map-key');
+          if (!snapshot.mappings[group]) snapshot.mappings[group] = {};
+          var checkbox = document.querySelector('[data-map-group="' + group + '"][data-map-key="' + key + '"]');
+          snapshot.mappings[group][key] = {
+            checked: !!(checkbox && checkbox.checked),
+            column: normalizeColumnText(input.value)
+          };
+        }
+        return snapshot;
+      }
+
+      function applyUiSnapshot_(snapshot) {
+        if (!snapshot) return;
+        isApplyingUiSettings = true;
+
+        try {
+          var inputs = snapshot.inputs || {};
+          for (var id in inputs) {
+            if (!Object.prototype.hasOwnProperty.call(inputs, id)) continue;
+            var element = byId(id);
+            if (!element) continue;
+            element.value = isColumnSettingInput_(id)
+              ? normalizeColumnText(inputs[id])
+              : inputs[id].toString().trim();
+          }
+
+          var mappings = snapshot.mappings || {};
+          for (var group in mappings) {
+            if (!Object.prototype.hasOwnProperty.call(mappings, group)) continue;
+            var groupMapping = mappings[group] || {};
+            for (var key in groupMapping) {
+              if (!Object.prototype.hasOwnProperty.call(groupMapping, key)) continue;
+              var item = groupMapping[key] || {};
+              var mapInputs = document.querySelectorAll('[data-map-column="' + group + '"][data-map-key="' + key + '"]');
+              for (var i = 0; i < mapInputs.length; i++) mapInputs[i].value = normalizeColumnText(item.column || '');
+              var checks = document.querySelectorAll('[data-map-group="' + group + '"][data-map-key="' + key + '"]');
+              for (var j = 0; j < checks.length; j++) checks[j].checked = !!item.checked;
+            }
+          }
+        } finally {
+          isApplyingUiSettings = false;
+        }
+      }
+
+      function scheduleUiSettingsSave_() {
+        if (!uiSettingsReady || !mappingsReady || isApplyingUiSettings) return;
+        if (uiAutoSaveTimer) clearTimeout(uiAutoSaveTimer);
+
+        uiAutoSaveTimer = setTimeout(function() {
+          uiAutoSaveTimer = null;
+          var snapshot = captureUiSnapshot_();
+          google.script.run
+            .withFailureHandler(function(err) {
+              setMessage('homeMessage', 'Could not save UI settings: ' + (err && err.message ? err.message : err));
+            })
+            .withSuccessHandler(function(result) {
+              setMessage('homeMessage', result && result.message ? result.message : 'UI settings saved.');
+            })
+            .SAVE_VERRACT_UI_SETTINGS({
+              current: snapshot,
+              undo: lastRemapSnapshot || null
+            });
+        }, 600);
+      }
+
+      function bindUiSettingsAutoSave_() {
+        var ids = getPersistedInputIds_();
+        for (var i = 0; i < ids.length; i++) {
+          var element = byId(ids[i]);
+          if (!element) continue;
+          element.addEventListener('input', scheduleUiSettingsSave_);
+          element.addEventListener('change', scheduleUiSettingsSave_);
+        }
+      }
+
+      function buildRemappedSnapshot_(snapshot, fromNumber, toNumber) {
+        var output = JSON.parse(JSON.stringify(snapshot));
+        var changes = [];
+        for (var id in output.inputs) {
+          if (!Object.prototype.hasOwnProperty.call(output.inputs, id)) continue;
+          var before = output.inputs[id];
+          if (!isColumnSettingInput_(id)) continue;
+          var after = remapColumnExpression_(before, fromNumber, toNumber);
+          output.inputs[id] = after;
+          if (before !== after) changes.push({ name: id, before: before || '(blank)', after: after || '(blank)' });
+        }
+        for (var group in output.mappings) {
+          if (!Object.prototype.hasOwnProperty.call(output.mappings, group)) continue;
+          for (var key in output.mappings[group]) {
+            if (!Object.prototype.hasOwnProperty.call(output.mappings[group], key)) continue;
+            var item = output.mappings[group][key];
+            var mapBefore = item.column || '';
+            var mapAfter = remapColumnExpression_(mapBefore, fromNumber, toNumber);
+            item.column = mapAfter;
+            if (mapBefore !== mapAfter) changes.push({ name: group + '.' + key, before: mapBefore || '(blank)', after: mapAfter || '(blank)' });
+          }
+        }
+        return { snapshot: output, changes: changes };
+      }
+
+      function renderRemapPreview_(changes) {
+        var container = byId('remapPreview');
+        container.innerHTML = '';
+        if (!changes.length) {
+          container.classList.add('hidden');
+          setMessage('remapMessage', 'No settings are affected by this column move.');
+          return;
+        }
+        for (var i = 0; i < changes.length; i++) {
+          var row = document.createElement('div');
+          row.className = 'remap-item';
+          var path = document.createElement('div');
+          path.className = 'remap-path';
+          path.textContent = changes[i].name;
+          var change = document.createElement('div');
+          change.className = 'remap-change';
+          change.textContent = changes[i].before + ' → ' + changes[i].after;
+          row.appendChild(path);
+          row.appendChild(change);
+          container.appendChild(row);
+        }
+        container.classList.remove('hidden');
+        setMessage('remapMessage', changes.length + ' setting(s) will change. Review before applying.');
+      }
+
+      function previewColumnRemap() {
+        try {
+          var fromNumber = columnLetterToNumber_(valueOf('remapFromColumn'));
+          var toNumber = columnLetterToNumber_(valueOf('remapToColumn'));
+          if (fromNumber === toNumber) throw new Error('Moved From and To columns must be different.');
+          var current = captureUiSnapshot_();
+          pendingRemap = buildRemappedSnapshot_(current, fromNumber, toNumber);
+          renderRemapPreview_(pendingRemap.changes);
+          byId('applyRemapButton').disabled = !pendingRemap.changes.length || engineRunning || startRequestPending;
+        } catch (err) {
+          pendingRemap = null;
+          byId('applyRemapButton').disabled = true;
+          byId('remapPreview').classList.add('hidden');
+          setMessage('remapMessage', err.message || String(err));
+        }
+      }
+
+      function saveUiSettings_(currentSnapshot, undoSnapshot, successMessage) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            uiSettingsReady = true;
+            setMessage('remapMessage', result && result.message ? result.message : successMessage);
+          })
+          .withFailureHandler(function(err) {
+            setMessage('remapMessage', 'UI changed, but settings could not be saved: ' + (err && err.message ? err.message : err));
+          })
+          .SAVE_VERRACT_UI_SETTINGS({ current: currentSnapshot, undo: undoSnapshot || null });
+      }
+
+      function applyColumnRemap() {
+        if (!pendingRemap || !pendingRemap.changes.length) return;
+        if (engineRunning || startRequestPending) {
+          setMessage('remapMessage', 'Stop the running verract process before remapping columns.');
+          return;
+        }
+        lastRemapSnapshot = captureUiSnapshot_();
+        applyUiSnapshot_(pendingRemap.snapshot);
+        saveUiSettings_(captureUiSnapshot_(), lastRemapSnapshot, 'Column mapping remap applied.');
+        setMessage('remapMessage', pendingRemap.changes.length + ' setting(s) remapped and saved.');
+        pendingRemap = null;
+        byId('applyRemapButton').disabled = true;
+        byId('undoRemapButton').disabled = false;
+        byId('remapPreview').classList.add('hidden');
+      }
+
+      function undoLastRemap() {
+        if (!lastRemapSnapshot) return;
+        if (engineRunning || startRequestPending) {
+          setMessage('remapMessage', 'Stop the running verract process before undoing a remap.');
+          return;
+        }
+        var current = captureUiSnapshot_();
+        applyUiSnapshot_(lastRemapSnapshot);
+        lastRemapSnapshot = null;
+        pendingRemap = null;
+        saveUiSettings_(captureUiSnapshot_(), current, 'Last column remap undone.');
+        byId('undoRemapButton').disabled = true;
+        byId('applyRemapButton').disabled = true;
+        byId('remapPreview').classList.add('hidden');
+        setMessage('remapMessage', 'Last column remap undone and saved.');
+      }
+
+      function loadUiSettings() {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            uiSettingsReady = true;
+
+            if (result && result.success && result.settings) {
+              var payload = result.settings;
+              if (payload.current) applyUiSnapshot_(payload.current);
+              lastRemapSnapshot = payload.undo || null;
+            }
+
+            mappingsReady = true;
+            byId('undoRemapButton').disabled = !lastRemapSnapshot || engineRunning || startRequestPending;
+            setMessage('homeMessage', 'Ready.');
+            refreshStatus();
+          })
+          .withFailureHandler(function(err) {
+            uiSettingsReady = false;
+            mappingsReady = true;
+            byId('undoRemapButton').disabled = !lastRemapSnapshot || engineRunning || startRequestPending;
+            setMessage('homeMessage', 'Mappings loaded, but saved UI settings could not be loaded: ' + (err && err.message ? err.message : err));
+            refreshStatus();
+          })
+          .GET_VERRACT_UI_SETTINGS();
       }
 
       function loadMappings() {
+        mappingsReady = false;
+        setBusy(true);
+        setMessage('homeMessage', 'Loading output mapping settings...');
+
         google.script.run
           .withSuccessHandler(function(settings) {
-            if (!settings || !settings.success) return;
+            if (!settings || !settings.success) {
+              mappingsReady = false;
+              setBusy(true);
+              setMessage('homeMessage', settings && settings.message ? settings.message : 'Failed to load output mapping settings.');
+              return;
+            }
+
             setMapping('verify', settings.verify || {});
             setMapping('resolve', settings.resolve || {});
             setMapping('shared', settings.shared || {});
             setMapping('action', settings.action || {});
+            setMapping('pipelineVerify', settings.verify || {});
+            setMapping('pipelineResolve', settings.resolve || {});
+            setMapping('pipelineShared', settings.shared || {});
+            setMapping('pipelineAction', settings.action || {});
+            setMapping('pipeline', settings.pipeline || {});
+
+            setMessage('homeMessage', 'Loading saved UI settings...');
+            loadUiSettings();
+          })
+          .withFailureHandler(function(err) {
+            mappingsReady = false;
+            setBusy(true);
+            setMessage('homeMessage', err && err.message ? err.message : 'Failed to load output mapping settings.');
           })
           .GET_VERRACT_OUTPUT_MAPPING_SETTINGS();
       }
@@ -598,6 +1182,7 @@
         renderSelection('verify', currentSelection);
         renderSelection('resolve', currentSelection);
         renderSelection('action', currentSelection);
+        renderSelection('pipeline', currentSelection);
       }
 
       function attachSelection(config) {
@@ -650,27 +1235,107 @@
         });
       }
 
+      function hasSelectedOutput(mapping) {
+        for (var key in mapping) {
+          if (Object.prototype.hasOwnProperty.call(mapping, key) && mapping[key]) return true;
+        }
+        return false;
+      }
+
+      function mergeMappings() {
+        var result = {};
+        for (var i = 0; i < arguments.length; i++) {
+          var mapping = arguments[i] || {};
+          for (var key in mapping) {
+            if (Object.prototype.hasOwnProperty.call(mapping, key) && mapping[key]) {
+              result[key] = mapping[key];
+            }
+          }
+        }
+        return result;
+      }
+
       function buildPipelineConfig() {
-        return {
-          verify: buildVerifyConfig(),
-          resolve: buildResolveConfig(),
-          action: buildActionConfig()
+        if (!mappingsReady) {
+          throw new Error('Output mapping settings are still loading. Wait until Home status shows Ready.');
+        }
+
+        var batchSize = valueOf('pipelineBatchSize');
+        var triggerGapMinutes = valueOf('pipelineTriggerGap');
+        var verifyMapping = getMapping('pipelineVerify');
+        var resolveMapping = getMapping('pipelineResolve');
+        var sharedMapping = getMapping('pipelineShared');
+        var actionMapping = getMapping('pipelineAction');
+        var pipelineMapping = getMapping('pipeline');
+
+        if (!hasSelectedOutput(verifyMapping)) {
+          throw new Error('At least one Verify output field must be selected.');
+        }
+        if (!hasSelectedOutput(resolveMapping)) {
+          throw new Error('At least one Resolve output field must be selected.');
+        }
+        if (!hasSelectedOutput(actionMapping)) {
+          throw new Error('At least one Action output field must be selected.');
+        }
+
+        var base = {
+          pathColumns: columnValueOf('pipelinePathColumns'),
+          fileColumn: columnValueOf('pipelineFileColumn'),
+          extensionColumn: columnValueOf('pipelineExtensionColumn'),
+          rootIdColumn: columnValueOf('pipelineRootIdColumn'),
+          batchSize: batchSize,
+          triggerGapMinutes: triggerGapMinutes
         };
+
+        var verify = attachSelection({
+          pathColumns: base.pathColumns,
+          fileColumn: base.fileColumn,
+          extensionColumn: base.extensionColumn,
+          rootIdColumn: base.rootIdColumn,
+          batchSize: batchSize,
+          triggerGapMinutes: triggerGapMinutes,
+          verifyOutputMapping: verifyMapping,
+          sharedOutputMapping: sharedMapping
+        });
+
+        var resolve = attachSelection({
+          pathColumns: base.pathColumns,
+          fileColumn: base.fileColumn,
+          extensionColumn: base.extensionColumn,
+          rootIdColumn: base.rootIdColumn,
+          batchSize: batchSize,
+          triggerGapMinutes: triggerGapMinutes,
+          resolveOutputMapping: resolveMapping,
+          sharedOutputMapping: sharedMapping
+        });
+
+        var action = attachSelection({
+          sourceObjectIdColumn: columnValueOf('pipelineSourceObjectIdColumn'),
+          operationColumn: columnValueOf('pipelineOperationColumn'),
+          targetColumn: columnValueOf('pipelineTargetColumn'),
+          rootIdColumn: base.rootIdColumn,
+          batchSize: batchSize,
+          triggerGapMinutes: triggerGapMinutes,
+          actionOutputMapping: mergeMappings(actionMapping, pipelineMapping)
+        });
+
+        return { verify: verify, resolve: resolve, action: action };
       }
 
       function setBusy(isBusy) {
-        byId('runVerifyButton').disabled = isBusy;
-        byId('runResolveButton').disabled = isBusy;
-        byId('runActionButton').disabled = isBusy;
-        byId('runPipelineButton').disabled = isBusy;
+        var disableRun = isBusy || !mappingsReady;
+        byId('runVerifyButton').disabled = disableRun;
+        byId('runResolveButton').disabled = disableRun;
+        byId('runActionButton').disabled = disableRun;
+        byId('runPipelineButton').disabled = disableRun;
       }
 
       function setLocalRunningStatus(mode) {
-        localRunMode = mode;
-        localRunUntil = Date.now() + 15000;
+        startRequestPending = true;
+        setBusy(true);
         renderStatus({
           running: true,
-          status: 'Running ' + mode,
+          status: 'Starting ' + mode,
           mode: mode,
           sheetName: currentSelection ? currentSelection.sheetName : '',
           currentRow: currentSelection ? currentSelection.startRow : '',
@@ -679,6 +1344,17 @@
       }
 
       function renderStatus(status) {
+        engineRunning = !!(status && status.running);
+
+        byId('previewRemapButton').disabled = engineRunning || startRequestPending;
+        byId('applyRemapButton').disabled =
+          !pendingRemap ||
+          !pendingRemap.changes ||
+          !pendingRemap.changes.length ||
+          engineRunning ||
+          startRequestPending;
+        byId('undoRemapButton').disabled = !lastRemapSnapshot || engineRunning || startRequestPending;
+
         var rowText = '-';
 
         if (status.currentRow || status.endRow) {
@@ -695,6 +1371,8 @@
         setText('resolveMode', status.mode);
         setText('actionStatus', status.status);
         setText('actionMode', status.mode);
+        setText('pipelineStatus', status.status);
+        setText('pipelineMode', status.mode);
       }
 
       function runVerify() {
@@ -707,12 +1385,13 @@
         startPolling();
         google.script.run
           .withSuccessHandler(function(result) {
-            setBusy(false);
+            startRequestPending = false;
             setMessage('verifyMessage', result && result.message ? result.message : 'Verify automation started.');
             refreshStatus();
             startPolling();
           })
           .withFailureHandler(function(err) {
+            startRequestPending = false;
             setBusy(false);
             setMessage('verifyMessage', err && err.message ? err.message : 'Failed to start Verify.');
           })
@@ -729,12 +1408,13 @@
         startPolling();
         google.script.run
           .withSuccessHandler(function(result) {
-            setBusy(false);
+            startRequestPending = false;
             setMessage('resolveMessage', result && result.message ? result.message : 'Resolve automation started.');
             refreshStatus();
             startPolling();
           })
           .withFailureHandler(function(err) {
+            startRequestPending = false;
             setBusy(false);
             setMessage('resolveMessage', err && err.message ? err.message : 'Failed to start Resolve.');
           })
@@ -751,11 +1431,12 @@
         startPolling();
         google.script.run
           .withSuccessHandler(function(result) {
-            setBusy(false);
+            startRequestPending = false;
             setMessage('actionMessage', result && result.message ? result.message : 'Action Preview started.');
             refreshStatus();
           })
           .withFailureHandler(function(err) {
+            startRequestPending = false;
             setBusy(false);
             setMessage('actionMessage', err && err.message ? err.message : 'Failed to start Action Preview.');
           })
@@ -772,11 +1453,13 @@
         startPolling();
         google.script.run
           .withSuccessHandler(function(result) {
-            setBusy(false);
+            startRequestPending = false;
             setMessage('homeMessage', result && result.message ? result.message : 'Multi-Phase Preview started.');
             refreshStatus();
+            startPolling();
           })
           .withFailureHandler(function(err) {
+            startRequestPending = false;
             setBusy(false);
             setMessage('homeMessage', err && err.message ? err.message : 'Failed to start Multi-Phase Preview.');
           })
@@ -786,40 +1469,30 @@
       function refreshStatus() {
         google.script.run
           .withSuccessHandler(function(status) {
-            var now = Date.now();
+            status = status || { running: false, status: 'Idle', mode: '' };
 
-            if (
-              (!status || !status.running) &&
-              localRunMode &&
-              now < localRunUntil
-            ) {
-              status = status || {};
-              status.running = true;
-              status.status = 'Running ' + localRunMode;
-              status.mode = localRunMode;
-              if (!status.sheetName && currentSelection) status.sheetName = currentSelection.sheetName;
-              if (!status.currentRow && currentSelection) status.currentRow = currentSelection.startRow;
-              if (!status.endRow && currentSelection) status.endRow = currentSelection.endRow;
-            } else if (status && status.running) {
-              localRunMode = status.mode || localRunMode;
-              localRunUntil = Date.now() + 15000;
-            } else {
-              localRunMode = '';
-              localRunUntil = 0;
+            // The backend is the source of truth. During the brief request-start
+            // window, keep controls locked until the start call returns.
+            var isBusy = !!status.running || startRequestPending;
+            setBusy(isBusy);
+            renderStatus(status);
+
+            if (status.running) {
+              startPolling();
+            } else if (!startRequestPending) {
+              stopPolling();
             }
-
-            renderStatus(status || { status: 'Idle' });
-
-            if (!status.running && !localRunMode) stopPolling();
           })
           .withFailureHandler(function(err) {
             setMessage('homeMessage', err && err.message ? err.message : 'Failed to refresh status.');
+            // Do not unlock controls on a status-read failure while a run may
+            // still be active. Stop & Reset remains available.
           })
           .GET_VERRACT_ENGINE_STATUS();
       }
 
       function startPolling() {
-        stopPolling();
+        if (pollingTimer) return;
         pollingTimer = setInterval(refreshStatus, 3000);
       }
 
@@ -834,6 +1507,8 @@
         setMessage('homeMessage', 'Stopping verract...');
         google.script.run
           .withSuccessHandler(function(result) {
+            startRequestPending = false;
+            setBusy(false);
             setMessage('homeMessage', result && result.message ? result.message : 'Stopped.');
             stopPolling();
             refreshStatus();
@@ -863,10 +1538,12 @@
         byId('openVerifyButton').addEventListener('click', function() { showView('verifyView'); });
         byId('openResolveButton').addEventListener('click', function() { showView('resolveView'); });
         byId('openActionButton').addEventListener('click', function() { showView('actionView'); });
-        byId('runPipelineButton').addEventListener('click', runPipeline);
+        byId('openPipelineButton').addEventListener('click', function() { showView('pipelineView'); });
         byId('backFromVerifyButton').addEventListener('click', function() { showView('homeView'); });
         byId('backFromResolveButton').addEventListener('click', function() { showView('homeView'); });
         byId('backFromActionButton').addEventListener('click', function() { showView('homeView'); });
+        byId('backFromPipelineButton').addEventListener('click', function() { showView('homeView'); });
+        byId('goVerifyFromPipelineButton').addEventListener('click', function() { showView('verifyView'); });
         byId('goVerifyFromActionButton').addEventListener('click', function() { showView('verifyView'); });
         byId('goResolveFromVerifyButton').addEventListener('click', function() { showView('resolveView'); });
         byId('goVerifyFromResolveButton').addEventListener('click', function() { showView('verifyView'); });
@@ -876,6 +1553,12 @@
         byId('runVerifyButton').addEventListener('click', runVerify);
         byId('runResolveButton').addEventListener('click', runResolve);
         byId('runActionButton').addEventListener('click', runAction);
+        byId('runPipelineButton').addEventListener('click', runPipeline);
+        byId('previewRemapButton').addEventListener('click', previewColumnRemap);
+        byId('applyRemapButton').addEventListener('click', applyColumnRemap);
+        byId('undoRemapButton').addEventListener('click', undoLastRemap);
+        byId('remapFromColumn').addEventListener('input', function() { pendingRemap = null; byId('applyRemapButton').disabled = true; });
+        byId('remapToColumn').addEventListener('input', function() { pendingRemap = null; byId('applyRemapButton').disabled = true; });
 
         var toolButtons = document.querySelectorAll('[data-action]');
         for (var i = 0; i < toolButtons.length; i++) {
@@ -891,6 +1574,7 @@
       document.addEventListener('DOMContentLoaded', function() {
         setupMappingUi();
         bindEvents();
+        bindUiSettingsAutoSave_();
         loadMappings();
         loadSavedSelection();
         renderSelectionEverywhere();
