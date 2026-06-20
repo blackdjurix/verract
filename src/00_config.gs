@@ -159,7 +159,14 @@ var ACTION_OUTPUT_FIELDS = [
   'TargetParentID',
   'TargetObjectName',
   'CleanupCandidate',
-  'OperationNote'
+  'OperationNote',
+  'PipelineStatus',
+  'FinalSource',
+  'FinalSourceObjectID',
+  'FinalSourceType',
+  'FinalSourcePath',
+  'FinalPhase',
+  'PipelineNote'
 ];
 
 var ACTION_OUTPUT_WIDTH = ACTION_OUTPUT_FIELDS.length;
@@ -177,7 +184,14 @@ var ACTION_METADATA_KEYS = [
   'ACTION_BATCH_SIZE',
   'ACTION_TRIGGER_GAP_MINUTES',
   'ACTION_LAST_SUCCESS_TS',
-  'ACTION_ENGINE_STARTED_AT'
+  'ACTION_ENGINE_STARTED_AT',
+  'ACTION_PIPELINE_MODE',
+  'ACTION_RESOLVED_ID_COLUMN',
+  'ACTION_RESOLVE_STATUS_COLUMN',
+  'ACTION_RESOLVE_MATCH_COUNT_COLUMN',
+  'ACTION_SOURCE_LABEL_COLUMN',
+  'ACTION_SOURCE_PATH_COLUMN',
+  'ACTION_SOURCE_OBJECT_NAME_COLUMN'
 ];
 
 var ACTION_DEFAULT_BATCH_SIZE = 50;
