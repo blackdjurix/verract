@@ -225,7 +225,9 @@ function START_VERIFY_FROM_SIDEBAR(config) {
 
   var verifyMapping =
     normalizeOutputMapping_(
-      preparedConfig.verifyOutputMapping || {},
+      normalizeVerifyOutputMappingAliases_(
+        preparedConfig.verifyOutputMapping || {}
+      ),
       VERIFY_BASE_OUTPUT_FIELDS,
       null
     );
@@ -245,6 +247,12 @@ function START_VERIFY_FROM_SIDEBAR(config) {
   validateOutputMapping_(
     preparedConfig.outputMapping,
     VERIFY_OUTPUT_FIELDS
+  );
+
+  requireOutputMappingFields_(
+    verifyMapping,
+    VERIFY_REQUIRED_OUTPUT_FIELDS,
+    'Verify Output'
   );
 
   saveSidebarOutputMappingAllowEmpty_(
@@ -283,10 +291,9 @@ function START_RESOLVE_FROM_SIDEBAR(config) {
     normalizeSidebarConfig_(config);
 
   var resolveMapping =
-    normalizeOutputMapping_(
+    normalizeOutputMappingAllowEmpty_(
       preparedConfig.resolveOutputMapping || {},
-      RESOLVE_BASE_OUTPUT_FIELDS,
-      null
+      RESOLVE_BASE_OUTPUT_FIELDS
     );
 
   var sharedMapping =
@@ -357,6 +364,10 @@ function GET_VERRACT_ENGINE_STATUS() {
     PropertiesService
       .getScriptProperties();
 
+  if (typeof recoverStaleExecutionState_ === 'function') {
+    recoverStaleExecutionState_(props);
+  }
+
   var engineRunning =
     props.getProperty(
       ENGINE_STATE_KEY
@@ -365,10 +376,13 @@ function GET_VERRACT_ENGINE_STATUS() {
   var pipelineEnabled =
     props.getProperty('PIPELINE_ENABLED') === 'TRUE';
 
+  var executionActive =
+    props.getProperty('EXECUTION_ACTIVE') === 'TRUE';
+
   // A Multi-Phase run remains logically active during the short trigger gap
   // between VERIFY, RESOLVE, and ACTION_PREVIEW, even when the phase engine
   // temporarily releases the global running flag.
-  var isRunning = engineRunning || pipelineEnabled;
+  var isRunning = engineRunning || pipelineEnabled || executionActive;
 
   var mode = '';
 
@@ -397,6 +411,10 @@ function GET_VERRACT_ENGINE_STATUS() {
     mode = 'PIPELINE:' + pipelinePhase;
   }
 
+  if (executionActive) {
+    mode = 'EXECUTION';
+  }
+
   return {
     running: isRunning,
     status:
@@ -412,6 +430,7 @@ function GET_VERRACT_ENGINE_STATUS() {
         'RESOLVE_SPREADSHEET_ID'
       ) ||
       props.getProperty('ACTION_SPREADSHEET_ID') ||
+      props.getProperty('EXECUTION_SPREADSHEET_ID') ||
       '',
     sheetName:
       props.getProperty(
@@ -421,6 +440,7 @@ function GET_VERRACT_ENGINE_STATUS() {
         'RESOLVE_SHEET_NAME'
       ) ||
       props.getProperty('ACTION_SHEET_NAME') ||
+      props.getProperty('EXECUTION_SHEET_NAME') ||
       '',
     currentRow:
       props.getProperty(
@@ -430,6 +450,7 @@ function GET_VERRACT_ENGINE_STATUS() {
         'RESOLVE_CURRENT_ROW'
       ) ||
       props.getProperty('ACTION_CURRENT_ROW') ||
+      props.getProperty('EXECUTION_CURRENT_ROW') ||
       '',
     endRow:
       props.getProperty(
@@ -439,6 +460,7 @@ function GET_VERRACT_ENGINE_STATUS() {
         'RESOLVE_END_ROW'
       ) ||
       props.getProperty('ACTION_END_ROW') ||
+      props.getProperty('EXECUTION_END_ROW') ||
       '',
     batchSize:
       props.getProperty(
@@ -448,8 +470,14 @@ function GET_VERRACT_ENGINE_STATUS() {
         'RESOLVE_BATCH_SIZE'
       ) ||
       props.getProperty('ACTION_BATCH_SIZE') ||
+      props.getProperty('EXECUTION_BATCH_SIZE') ||
       '',
     lastSuccessTimestamp:
+      (executionActive
+        ? props.getProperty(
+            'EXECUTION_LAST_SUCCESS_TS'
+          )
+        : '') ||
       props.getProperty(
         'AUTO_LAST_SUCCESS_TS'
       ) ||
@@ -457,6 +485,7 @@ function GET_VERRACT_ENGINE_STATUS() {
         'RESOLVE_LAST_SUCCESS_TS'
       ) ||
       props.getProperty('ACTION_LAST_SUCCESS_TS') ||
+      props.getProperty('EXECUTION_LAST_SUCCESS_TS') ||
       '',
     lastError:
       props.getProperty(
@@ -465,6 +494,7 @@ function GET_VERRACT_ENGINE_STATUS() {
       props.getProperty(
         'RESOLVE_LAST_ERROR'
       ) ||
+      props.getProperty('EXECUTION_LAST_ERROR') ||
       ''
   };
 }
@@ -627,6 +657,29 @@ function normalizeOutputMappingAllowEmpty_(
   return normalized;
 }
 
+function normalizeVerifyOutputMappingAliases_(
+  mapping
+) {
+  var normalized = {};
+
+  for (var field in mapping || {}) {
+    if (mapping.hasOwnProperty(field)) {
+      normalized[field] = mapping[field];
+    }
+  }
+
+  if (
+    !normalized.Type &&
+    normalized.FileType
+  ) {
+    normalized.Type =
+      normalized.FileType;
+  }
+
+  delete normalized.FileType;
+  return normalized;
+}
+
 function saveSidebarOutputMappingAllowEmpty_(
   propertyName,
   mapping,
@@ -676,8 +729,20 @@ function loadSidebarOutputMappingAsNumbers_(
   }
 
   try {
+    var parsedMapping =
+      JSON.parse(jsonText);
+
+    if (
+      allowedFields.indexOf('Type') >= 0
+    ) {
+      parsedMapping =
+        normalizeVerifyOutputMappingAliases_(
+          parsedMapping
+        );
+    }
+
     return normalizeOutputMappingAllowEmpty_(
-      JSON.parse(jsonText),
+      parsedMapping,
       allowedFields
     );
   } catch (err) {
@@ -718,46 +783,154 @@ function START_ACTION_FROM_SIDEBAR(config) {
 }
 
 function START_MULTI_PHASE_FROM_SIDEBAR(config) {
-  if (!config) throw new Error('Pipeline config is required.');
-
-  var verifyConfig = normalizeSidebarConfig_(config.verify || {});
-  var resolveConfig = normalizeSidebarConfig_(config.resolve || {});
-  var actionConfig = normalizeSidebarConfig_(config.action || {});
-
-  var verifyMapping = normalizeOutputMapping_(
-    verifyConfig.verifyOutputMapping || {},
-    VERIFY_BASE_OUTPUT_FIELDS,
-    null
-  );
-  var resolveMapping = normalizeOutputMapping_(
-    resolveConfig.resolveOutputMapping || {},
-    RESOLVE_BASE_OUTPUT_FIELDS,
-    null
-  );
-  var sharedMapping = normalizeOutputMappingAllowEmpty_(
-    verifyConfig.sharedOutputMapping || resolveConfig.sharedOutputMapping || {},
-    SHARED_OUTPUT_FIELDS
-  );
-  var actionMapping = normalizeOutputMapping_(
-    actionConfig.actionOutputMapping || {},
-    ACTION_OUTPUT_FIELDS,
-    null
-  );
-
-  verifyConfig.outputMapping = mergeOutputMappings_(verifyMapping, sharedMapping);
-  resolveConfig.outputMapping = mergeOutputMappings_(resolveMapping, sharedMapping);
-  resolveConfig.verifyOutputMapping = verifyMapping;
-  actionConfig.outputMapping = actionMapping;
-
-  validateOutputMapping_(verifyConfig.outputMapping, VERIFY_OUTPUT_FIELDS);
-  validateOutputMapping_(resolveConfig.outputMapping, RESOLVE_OUTPUT_FIELDS);
-  validateOutputMapping_(actionConfig.outputMapping, ACTION_OUTPUT_FIELDS);
-
-  if (!verifyMapping.Exists) {
-    throw new Error('Multi-Phase requires Verify Exists output mapping.');
+  if (!config) {
+    throw new Error(
+      'Multi-Phase config is required.'
+    );
   }
-  if (!resolveMapping.ResolvedID || !resolveMapping.ResolveStatus || !resolveMapping.MatchCount) {
-    throw new Error('Multi-Phase requires Resolve ResolvedID, ResolveStatus, and MatchCount output mappings.');
+
+  var verifyConfig =
+    normalizeSidebarConfig_(
+      config.verify || {}
+    );
+
+  var resolveConfig =
+    normalizeSidebarConfig_(
+      config.resolve || {}
+    );
+
+  var actionConfig =
+    normalizeSidebarConfig_(
+      config.action || {}
+    );
+
+  var phases = config.phases || {};
+  var runVerify = phases.verify !== false;
+  var runResolve = phases.resolve === true;
+  var runAction = phases.action === true;
+
+  if (runResolve || runAction) {
+    runVerify = true;
+  }
+
+  var verifyMapping =
+    normalizeOutputMapping_(
+      normalizeVerifyOutputMappingAliases_(
+        verifyConfig.verifyOutputMapping || {}
+      ),
+      VERIFY_BASE_OUTPUT_FIELDS,
+      null
+    );
+
+  var resolveMapping =
+    normalizeOutputMappingAllowEmpty_(
+      resolveConfig.resolveOutputMapping || {},
+      RESOLVE_BASE_OUTPUT_FIELDS
+    );
+
+  var sharedMapping =
+    normalizeOutputMappingAllowEmpty_(
+      config.workflowSharedMapping ||
+      verifyConfig.sharedOutputMapping ||
+      resolveConfig.sharedOutputMapping ||
+      {},
+      SHARED_OUTPUT_FIELDS
+    );
+
+  var pipelineMapping =
+    normalizeOutputMappingAllowEmpty_(
+      config.workflowPipelineMapping ||
+      {},
+      PIPELINE_OUTPUT_FIELDS
+    );
+
+  var actionMapping =
+    normalizeOutputMappingAllowEmpty_(
+      actionConfig.actionOutputMapping || {},
+      ACTION_OUTPUT_FIELDS
+    );
+
+  verifyConfig.outputMapping =
+    mergeOutputMappings_(
+      verifyMapping,
+      sharedMapping
+    );
+
+  resolveConfig.outputMapping =
+    mergeOutputMappings_(
+      resolveMapping,
+      sharedMapping
+    );
+
+  resolveConfig.verifyOutputMapping =
+    verifyMapping;
+
+  actionConfig.actionOutputMapping =
+    actionMapping;
+
+  actionConfig.workflowOutputMapping =
+    pipelineMapping;
+
+  actionConfig.sourcePathIdColumn =
+    sharedMapping.SharedPathID;
+
+  actionConfig.sourceFileIdColumn =
+    sharedMapping.SharedFileID;
+
+  if (runVerify) {
+    validateOutputMapping_(
+      verifyConfig.outputMapping,
+      VERIFY_OUTPUT_FIELDS
+    );
+  }
+
+  if (runResolve) {
+    validateOutputMapping_(
+      resolveConfig.outputMapping,
+      RESOLVE_OUTPUT_FIELDS
+    );
+  }
+
+  if (runAction) {
+    validateOutputMapping_(
+      actionMapping,
+      ACTION_OUTPUT_FIELDS
+    );
+  }
+
+  if (
+    runVerify &&
+    !verifyMapping.Exists
+  ) {
+    throw new Error(
+      'Verify Exists mapping is required for the selected phases.'
+    );
+  }
+
+  if (runResolve || runAction) {
+    requireOutputMappingFields_(
+      sharedMapping,
+      actionConfig.sourceObjectMode === 'FOLDER'
+        ? FOLDER_OBJECT_RESULT_REQUIRED_FIELDS
+        : FILE_OBJECT_RESULT_REQUIRED_FIELDS,
+      'Object Result'
+    );
+  }
+
+  if (runAction) {
+    requireOutputMappingFields_(
+      actionMapping,
+      ACTION_REQUIRED_OUTPUT_FIELDS,
+      'Action Output'
+    );
+  }
+
+  if (runAction) {
+    requireOutputMappingFields_(
+      pipelineMapping,
+      PIPELINE_REQUIRED_OUTPUT_FIELDS,
+      'Workflow Result'
+    );
   }
 
   saveSidebarOutputMappingAllowEmpty_(
@@ -765,16 +938,25 @@ function START_MULTI_PHASE_FROM_SIDEBAR(config) {
     verifyMapping,
     VERIFY_BASE_OUTPUT_FIELDS
   );
+
   saveSidebarOutputMappingAllowEmpty_(
     RESOLVE_OUTPUT_MAPPING_PROPERTY,
     resolveMapping,
     RESOLVE_BASE_OUTPUT_FIELDS
   );
+
   saveSidebarOutputMappingAllowEmpty_(
     SHARED_OUTPUT_MAPPING_PROPERTY,
     sharedMapping,
     SHARED_OUTPUT_FIELDS
   );
+
+  saveSidebarOutputMappingAllowEmpty_(
+    'PIPELINE_OUTPUT_MAPPING',
+    pipelineMapping,
+    PIPELINE_OUTPUT_FIELDS
+  );
+
   saveSidebarOutputMappingAllowEmpty_(
     'ACTION_OUTPUT_MAPPING',
     actionMapping,
@@ -782,16 +964,51 @@ function START_MULTI_PHASE_FROM_SIDEBAR(config) {
   );
 
   actionConfig.pipelineMode = true;
-  actionConfig.resolvedIdColumn = resolveMapping.ResolvedID;
-  actionConfig.resolveStatusColumn = resolveMapping.ResolveStatus;
-  actionConfig.resolveMatchCountColumn = resolveMapping.MatchCount;
-  actionConfig.sourceLabelColumn = sharedMapping.SharedSource || 0;
-  actionConfig.sourcePathColumn = sharedMapping.SharedPath || 0;
-  actionConfig.sourceObjectNameColumn = sharedMapping.SharedFilename || 0;
+  actionConfig.sourceObjectMode = String(
+    actionConfig.sourceObjectMode || 'FILE'
+  ).trim().toUpperCase();
+
+  actionConfig.verifyExistsColumn =
+    verifyMapping.Exists;
+
+  actionConfig.verifyFileIdColumn =
+    verifyMapping.FileID || 0;
+
+  actionConfig.verifyPathIdColumn =
+    verifyMapping.PathID || 0;
+
+  actionConfig.resolvedIdColumn =
+    resolveMapping.ResolvedID || 0;
+
+  actionConfig.resolveStatusColumn =
+    resolveMapping.ResolveStatus || 0;
+
+  actionConfig.resolveMatchCountColumn =
+    resolveMapping.MatchCount || 0;
+
+  actionConfig.sourceLabelColumn =
+    sharedMapping.SharedSource || 0;
+
+  actionConfig.sourcePathColumn =
+    sharedMapping.SharedPath || 0;
+
+  actionConfig.sourceObjectNameColumn =
+    sharedMapping.SharedFilename || 0;
 
   return startMultiPhasePipeline_({
     verify: verifyConfig,
     resolve: resolveConfig,
-    action: actionConfig
+    action: actionConfig,
+    phases: {
+      verify: runVerify,
+      resolve: runResolve,
+      action: runAction
+    }
   });
+}
+
+
+function GET_EXECUTION_STATUS_FROM_SIDEBAR() {
+  var p=PropertiesService.getScriptProperties();
+  return {running:p.getProperty('EXECUTION_ACTIVE')==='TRUE',runId:p.getProperty('EXECUTION_RUN_ID')||'',currentRow:p.getProperty('EXECUTION_CURRENT_ROW')||'',endRow:p.getProperty('EXECUTION_END_ROW')||''};
 }

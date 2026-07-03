@@ -116,6 +116,16 @@ function CLEAR_TRIGGER_AND_STATE() {
   if (typeof PIPELINE_METADATA_KEYS !== 'undefined') {
     PIPELINE_METADATA_KEYS.forEach(function(key) { props.deleteProperty(key); });
   }
+  if (typeof EXECUTION_METADATA_KEYS !== 'undefined') {
+    EXECUTION_METADATA_KEYS.forEach(function(key) {
+      props.deleteProperty(key);
+    });
+  }
+  props.deleteProperty('EXECUTION_LAST_ERROR');
+  props.deleteProperty('WORKFLOW_OUTPUT_MAPPING');
+  props.deleteProperty('PIPELINE_RUN_VERIFY');
+  props.deleteProperty('PIPELINE_RUN_RESOLVE');
+  props.deleteProperty('PIPELINE_RUN_ACTION');
   props.deleteProperty(
     'AUTO_BACKOFF_UNTIL'
   );

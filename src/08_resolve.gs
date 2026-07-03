@@ -292,6 +292,12 @@ function startResolveAutomation_(config) {
 
     checkEngineHeartbeat_();
 
+    if (props.getProperty('EXECUTION_ACTIVE') === 'TRUE') {
+      throw new Error(
+        'Real Execution masih aktif. Jalankan Stop & Reset dulu.'
+      );
+    }
+
     if (
       props.getProperty(ENGINE_STATE_KEY) ===
       'TRUE'
@@ -716,6 +722,10 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
     verifyOutputColumn;
   var errorColumn =
     verifyOutputMapping.Error || 0;
+  var fileIdColumn =
+    verifyOutputMapping.FileID || 0;
+  var pathIdColumn =
+    verifyOutputMapping.PathID || 0;
 
   for (var i = 0; i < rowValues.length; i++) {
     var row = rowValues[i];
@@ -731,6 +741,20 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
         row,
         errorColumn - 1
       );
+
+    var verifyFileId = String(
+      getResolveRowValue_(
+        row,
+        fileIdColumn - 1
+      ) || ''
+    ).trim();
+
+    var verifyPathId = String(
+      getResolveRowValue_(
+        row,
+        pathIdColumn - 1
+      ) || ''
+    ).trim();
 
     var existsText =
       existsValue === null ||
@@ -749,24 +773,26 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
             .toString()
             .trim();
 
-    if (!existsText && !errorText) {
-      output.push(existingOutput[i]);
-      continue;
-    }
-
-    if (existsText === 'TRUE') {
+    if (
+      isCompleteFileVerifyForResolve_(
+        existsText,
+        verifyFileId,
+        verifyPathId
+      )
+    ) {
       output.push(
         convertResolveRowToObject_(
           convertResolveResultToRow_(
             buildResolveResult_(
-              'SKIPPED_ALREADY_VERIFIED',
+              'RESOLVE_NOT_REQUIRED',
+              verifyFileId,
+              'file',
               '',
-              '',
-              '',
-              0,
-              '',
-              '',
-              'Verify result is not failed.'
+              1,
+              'VERIFY_COMPLETE',
+              'HIGH',
+              'Verify already returned complete FileID and PathID.',
+              verifyPathId
             )
           )
         )
@@ -781,26 +807,6 @@ function processResolveBatch_(sheet, startRow, numRows, props) {
       ) !== ''
     ) {
       output.push(existingOutput[i]);
-      continue;
-    }
-
-    if (!isFailedVerifyRow_(existsValue, errorValue)) {
-      output.push(
-        convertResolveRowToObject_(
-          convertResolveResultToRow_(
-            buildResolveResult_(
-              'SKIPPED',
-              '',
-              '',
-              '',
-              0,
-              '',
-              '',
-              'Verify result is not ready for Resolve.'
-            )
-          )
-        )
-      );
       continue;
     }
 
@@ -1299,6 +1305,18 @@ function isFailedVerifyRow_(existsValue, errorValue) {
   }
 
   return existsText !== 'TRUE' && hasError;
+}
+
+function isCompleteFileVerifyForResolve_(
+  existsValue,
+  fileId,
+  pathId
+) {
+  return String(
+    existsValue || ''
+  ).trim().toUpperCase() === 'TRUE' &&
+    String(fileId || '').trim() !== '' &&
+    String(pathId || '').trim() !== '';
 }
 
 function getResolveRowValue_(row, index) {

@@ -32,7 +32,8 @@ function deleteExistingTriggers_() {
     'TRIGGER_BATCH_AUDIT_MULTI',
     'TRIGGER_RESOLVE_BATCH_MULTI',
     'TRIGGER_ACTION_PREVIEW_BATCH_MULTI',
-    'TRIGGER_MULTI_PHASE_TRANSITION'
+    'TRIGGER_MULTI_PHASE_TRANSITION',
+    'TRIGGER_EXECUTION_BATCH_MULTI'
   ];
   for (
     var i = 0;
@@ -411,3 +412,383 @@ function renameDriveObject_(objectId, targetName) {
   return inspectDriveObjectById_(objectId);
 }
 
+
+
+function ensureDriveFolderPath_(rootId, folderPath) {
+  var normalized = normalizePathForTraversal_(folderPath);
+  var folder = DriveApp.getFolderById(String(rootId || '').trim());
+  if (!normalized) return folder;
+  var parts = normalized.split('\\');
+  for (var i = 0; i < parts.length; i++) {
+    var name = String(parts[i] || '').trim();
+    if (!name) continue;
+    var matches = folder.getFoldersByName(name);
+    if (matches.hasNext()) {
+      folder = matches.next();
+      if (matches.hasNext()) throw new Error('AMBIGUOUS_TARGET_FOLDER: ' + name);
+    } else {
+      folder = folder.createFolder(name);
+    }
+  }
+  return folder;
+}
+
+function copyDriveObject_(objectId, targetParentId, targetName, ignoredStats) {
+  var source = inspectDriveObjectById_(objectId);
+  if (!source.exists || !source.accessible || source.trashed) throw new Error(source.error || 'SOURCE_NOT_AVAILABLE');
+  var parent = DriveApp.getFolderById(targetParentId);
+  var name = String(targetName || source.objectName).trim();
+  if (source.objectType === 'file') return DriveApp.getFileById(objectId).makeCopy(name, parent).getId();
+  return copyDriveFolderRecursive_(DriveApp.getFolderById(objectId), parent, name, ignoredStats).getId();
+}
+
+function copyDriveFolderRecursive_(sourceFolder, targetParent, targetName, ignoredStats) {
+  var created = targetParent.createFolder(targetName || sourceFolder.getName());
+  var files = sourceFolder.getFiles();
+  while (files.hasNext()) {
+    var f = files.next();
+    if (isIgnoredSystemJunkFile_(f)) {
+      recordIgnoredSystemJunkFile_(ignoredStats, f.getName());
+      continue;
+    }
+    f.makeCopy(f.getName(), created);
+  }
+  var folders = sourceFolder.getFolders();
+  while (folders.hasNext()) {
+    var child = folders.next();
+    copyDriveFolderRecursive_(child, created, child.getName(), ignoredStats);
+  }
+  return created;
+}
+
+function isIgnoredSystemJunkFile_(fileOrName) {
+  var name = typeof fileOrName === 'string'
+    ? fileOrName
+    : fileOrName && typeof fileOrName.getName === 'function'
+      ? fileOrName.getName()
+      : '';
+
+  return FOLDER_OPERATION_IGNORED_FILE_NAMES.indexOf(
+    String(name || '').trim().toLowerCase()
+  ) !== -1;
+}
+
+function recordIgnoredSystemJunkFile_(stats, name) {
+  if (!stats) return;
+  stats.ignoredFileCount = (stats.ignoredFileCount || 0) + 1;
+  stats.ignoredFileNames = stats.ignoredFileNames || [];
+  if (stats.ignoredFileNames.indexOf(name) === -1) {
+    stats.ignoredFileNames.push(name);
+  }
+}
+
+function formatIgnoredSystemJunkFilesNote_(stats) {
+  if (!stats || !stats.ignoredFileCount) return '';
+  var names =
+    (stats.ignoredFileNames || []).join(', ');
+  var failedCount =
+    stats.ignoredFileErrorCount || 0;
+
+  if (failedCount) {
+    return 'Found ' + stats.ignoredFileCount +
+      ' system junk file(s): ' + names +
+      '. Moved ' +
+      Math.max(
+        0,
+        stats.ignoredFileCount - failedCount
+      ) +
+      ' junk file(s) to Trash; failed to move ' + failedCount +
+      ' junk file(s) to Trash; main operation continued.';
+  }
+
+  return 'Skipped ' + stats.ignoredFileCount +
+    ' system junk file(s): ' + names + '.';
+}
+
+function trashIgnoredSystemJunkFilesRecursive_(folder, stats) {
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    var file = files.next();
+    if (!isIgnoredSystemJunkFile_(file)) continue;
+    recordIgnoredSystemJunkFile_(stats, file.getName());
+    try {
+      file.setTrashed(true);
+    } catch (err) {
+      stats.ignoredFileErrorCount =
+        (stats.ignoredFileErrorCount || 0) + 1;
+    }
+  }
+
+  var folders = folder.getFolders();
+  while (folders.hasNext()) {
+    trashIgnoredSystemJunkFilesRecursive_(folders.next(), stats);
+  }
+
+  return stats;
+}
+
+function trashDriveObject_(objectId) {
+  var source = inspectDriveObjectById_(objectId);
+  if (!source.exists || !source.accessible) throw new Error(source.error || 'SOURCE_NOT_AVAILABLE');
+  if (source.objectType === 'folder') DriveApp.getFolderById(objectId).setTrashed(true);
+  else DriveApp.getFileById(objectId).setTrashed(true);
+  return true;
+}
+
+
+function getSingleChildFolderByName_(parentFolder, name) {
+  var matches =
+    parentFolder.getFoldersByName(
+      String(name || '').trim()
+    );
+
+  if (!matches.hasNext()) {
+    return null;
+  }
+
+  var folder =
+    matches.next();
+
+  if (matches.hasNext()) {
+    throw new Error(
+      'AMBIGUOUS_TARGET_FOLDER: ' +
+      name
+    );
+  }
+
+  return folder;
+}
+
+function moveFolderContentsIntoTarget_(
+  sourceFolderId,
+  targetFolderId
+) {
+  var sourceFolder =
+    DriveApp.getFolderById(
+      sourceFolderId
+    );
+
+  var targetFolder =
+    DriveApp.getFolderById(
+      targetFolderId
+    );
+
+  if (
+    sourceFolder.getId() ===
+    targetFolder.getId()
+  ) {
+    return {
+      fileCount: 0,
+      folderCount: 0,
+      note:
+        'Source and target folders are identical.'
+    };
+  }
+
+  var result = {
+    fileCount: 0,
+    folderCount: 0,
+    ignoredFileCount: 0,
+    ignoredFileNames: []
+  };
+
+  mergeMoveFolderContents_(
+    sourceFolder,
+    targetFolder,
+    result
+  );
+
+  return {
+    fileCount: result.fileCount,
+    folderCount: result.folderCount,
+    note:
+      'Moved ' +
+      result.fileCount +
+      ' file(s) and merged ' +
+      result.folderCount +
+      ' folder(s).' +
+      (result.ignoredFileCount
+        ? ' ' + formatIgnoredSystemJunkFilesNote_(result)
+        : '')
+  };
+}
+
+function mergeMoveFolderContents_(
+  sourceFolder,
+  targetFolder,
+  result
+) {
+  var files =
+    sourceFolder.getFiles();
+
+  while (files.hasNext()) {
+    var file = files.next();
+    if (isIgnoredSystemJunkFile_(file)) {
+      recordIgnoredSystemJunkFile_(result, file.getName());
+      continue;
+    }
+    file.moveTo(
+      targetFolder
+    );
+    result.fileCount++;
+  }
+
+  var sourceChildren = [];
+  var folders =
+    sourceFolder.getFolders();
+
+  while (folders.hasNext()) {
+    sourceChildren.push(
+      folders.next()
+    );
+  }
+
+  for (
+    var i = 0;
+    i < sourceChildren.length;
+    i++
+  ) {
+    var sourceChild =
+      sourceChildren[i];
+
+    var targetChild =
+      getSingleChildFolderByName_(
+        targetFolder,
+        sourceChild.getName()
+      );
+
+    if (targetChild) {
+      mergeMoveFolderContents_(
+        sourceChild,
+        targetChild,
+        result
+      );
+
+      if (
+        isDriveFolderEmpty_(
+          sourceChild,
+          true
+        )
+      ) {
+        sourceChild.setTrashed(
+          true
+        );
+      }
+    } else {
+      sourceChild.moveTo(
+        targetFolder
+      );
+    }
+
+    result.folderCount++;
+  }
+}
+
+function copyFolderContentsIntoTarget_(
+  sourceFolderId,
+  targetFolderId
+) {
+  var sourceFolder =
+    DriveApp.getFolderById(
+      sourceFolderId
+    );
+
+  var targetFolder =
+    DriveApp.getFolderById(
+      targetFolderId
+    );
+
+  if (
+    sourceFolder.getId() ===
+    targetFolder.getId()
+  ) {
+    throw new Error(
+      'SOURCE_AND_TARGET_FOLDER_ARE_IDENTICAL'
+    );
+  }
+
+  var result = {
+    fileCount: 0,
+    folderCount: 0,
+    ignoredFileCount: 0,
+    ignoredFileNames: []
+  };
+
+  mergeCopyFolderContents_(
+    sourceFolder,
+    targetFolder,
+    result
+  );
+
+  return {
+    fileCount: result.fileCount,
+    folderCount: result.folderCount,
+    note:
+      'Copied ' +
+      result.fileCount +
+      ' file(s) and merged ' +
+      result.folderCount +
+      ' folder(s).' +
+      (result.ignoredFileCount
+        ? ' ' + formatIgnoredSystemJunkFilesNote_(result)
+        : '')
+  };
+}
+
+function mergeCopyFolderContents_(
+  sourceFolder,
+  targetFolder,
+  result
+) {
+  var files =
+    sourceFolder.getFiles();
+
+  while (files.hasNext()) {
+    var file =
+      files.next();
+
+    if (isIgnoredSystemJunkFile_(file)) {
+      recordIgnoredSystemJunkFile_(
+        result,
+        file.getName()
+      );
+      continue;
+    }
+
+    file.makeCopy(
+      file.getName(),
+      targetFolder
+    );
+
+    result.fileCount++;
+  }
+
+  var folders =
+    sourceFolder.getFolders();
+
+  while (folders.hasNext()) {
+    var sourceChild =
+      folders.next();
+
+    var targetChild =
+      getSingleChildFolderByName_(
+        targetFolder,
+        sourceChild.getName()
+      );
+
+    if (!targetChild) {
+      targetChild =
+        targetFolder.createFolder(
+          sourceChild.getName()
+        );
+    }
+
+    mergeCopyFolderContents_(
+      sourceChild,
+      targetChild,
+      result
+    );
+
+    result.folderCount++;
+  }
+}

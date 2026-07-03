@@ -52,7 +52,8 @@
         font-size: 12px;
         font-weight: 600;
       }
-      input {
+      input,
+      select {
         box-sizing: border-box;
         width: 100%;
         padding: 7px 8px;
@@ -60,7 +61,8 @@
         border-radius: 6px;
         font-size: 13px;
       }
-      input:focus { outline: none; border-color: var(--blue); }
+      input:focus,
+      select:focus { outline: none; border-color: var(--blue); }
       .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       button {
         width: 100%;
@@ -120,9 +122,141 @@
       .remap-path { color: var(--muted); word-break: break-word; }
       .remap-change { font-weight: 700; white-space: nowrap; }
       .hidden { display: none; }
+
+      .global-nav {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
+        display: flex;
+        gap: 6px;
+      }
+      .global-nav button {
+        width: 34px;
+        height: 34px;
+        margin: 0;
+        padding: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .global-menu {
+        position: fixed;
+        top: 50px;
+        right: 10px;
+        z-index: 1001;
+        width: 210px;
+        padding: 8px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 8px 24px rgba(60,64,67,.18);
+      }
+      .global-menu button {
+        margin: 2px 0;
+        text-align: left;
+      }
+      .global-feedback {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        z-index: 1200;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 8px 24px rgba(60,64,67,.2);
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .global-feedback.running { border-color: var(--blue); }
+      .global-feedback.error { border-color: var(--danger); color: var(--danger); }
+      .global-feedback.success { border-color: #137333; color: #137333; }
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1300;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 14px;
+        background: rgba(32, 33, 36, 0.45);
+      }
+      .modal-overlay.hidden { display: none; }
+      .modal-card {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 320px;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 8px 24px rgba(60,64,67,.24);
+      }
+      .modal-title {
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .modal-error {
+        margin-top: 6px;
+        color: var(--danger);
+        font-size: 12px;
+      }
+      .phase-choice {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 0;
+      }
+      .phase-choice input { width: auto; }
+
+
+      .required-label::after {
+        content: " *";
+        color: var(--danger);
+        font-weight: 700;
+      }
+
+      .mandatory-field {
+        border-left: 3px solid var(--danger);
+        padding-left: 7px;
+      }
+
+      .mapping-row.mandatory-mapping {
+        padding: 5px 6px;
+        border-left: 3px solid var(--danger);
+        border-radius: 4px;
+        background: #fff7f6;
+      }
+
+      .mapping-row.mandatory-mapping > div::after {
+        content: " *";
+        color: var(--danger);
+        font-weight: 700;
+      }
+
+      .mandatory-note {
+        margin-top: 6px;
+        color: var(--danger);
+        font-size: 11px;
+      }
     </style>
   </head>
   <body>
+    <div class="global-nav">
+      <button id="globalHomeButton" type="button" title="Home">⌂</button>
+      <button id="globalMenuButton" type="button" title="Menu">☰</button>
+    </div>
+    <div id="globalMenu" class="global-menu hidden">
+      <button type="button" data-global-view="verifyView">Verify</button>
+      <button type="button" data-global-view="resolveView">Resolve</button>
+      <button type="button" data-global-view="actionView">Action</button>
+      <button type="button" data-global-view="workflowView">Workflow Output</button>
+      <button type="button" data-global-view="pipelineView">Multi-Phase</button>
+      <button type="button" data-global-view="executionView">Execution</button>
+    </div>
+
     <div class="topbar">
       <h1>verract</h1>
       <div class="version">v0.4.0 · action foundation</div>
@@ -151,17 +285,28 @@
 
       <div class="section">
         <div class="section-title">Workflow</div>
-        <button class="nav" id="openVerifyButton" type="button">⏰ Verify</button>
-        <button class="nav" id="openResolveButton" type="button">🔎 Resolve</button>
-        <button class="nav" id="openActionButton" type="button">🧭 Action Preview</button>
-        <button class="nav" id="openPipelineButton" type="button">🔗 Multi-Phase Preview</button>
+        <div class="hint">Configure each phase from the menu, then run it here.</div>
+        <div class="button-row">
+          <button class="primary" id="runVerifyButton" type="button">Verify</button>
+          <button class="primary" id="runResolveButton" type="button">Resolve</button>
+          <button class="primary" id="runActionButton" type="button">Action Preview</button>
+          <button class="primary" id="runPipelineButton" type="button">Multi-Phase</button>
+        </div>
+        <button id="validateExecutionButton" type="button">Validate Execution</button>
+        <button class="danger" id="runExecutionButton" type="button">Execution</button>
       </div>
 
       <div class="section">
         <div class="section-title">Column Mapping Remap</div>
         <div class="grid-2">
-          <div><label>Moved Column From</label><input id="remapFromColumn" placeholder="AD"></div>
-          <div><label>Moved Column To</label><input id="remapToColumn" placeholder="I"></div>
+          <div>
+            <label>Moved Column From</label>
+            <input id="remapFromColumn" placeholder="AD">
+          </div>
+          <div>
+            <label>Moved Column To</label>
+            <input id="remapToColumn" placeholder="I">
+          </div>
         </div>
         <div class="button-row">
           <button id="previewRemapButton" type="button">Preview Changes</button>
@@ -183,12 +328,7 @@
     </div>
 
     <div id="verifyView" class="view">
-      <div class="button-row">
-        <button id="backFromVerifyButton" type="button">← Home</button>
-        <button id="goResolveFromVerifyButton" type="button">Go Resolve →</button>
-      </div>
-
-      <div class="section">
+<div class="section">
         <div class="section-title">Status</div>
         <div class="status-row"><div class="label">Engine</div><div class="value" id="verifyStatus">-</div></div>
         <div class="status-row"><div class="label">Mode</div><div class="value" id="verifyMode">-</div></div>
@@ -203,14 +343,14 @@
 
       <div class="section">
         <div class="section-title">Verify Config</div>
-        <label>Path Column(s)</label>
-        <input id="verifyPathColumns" value="D-G" placeholder="D, D-G, D,E,G">
+        <label class="required-label">Path Column(s)</label>
+        <input id="verifyPathColumns" class="mandatory-field" value="D-G" placeholder="D, D-G, D,E,G">
         <div class="grid-2">
           <div><label>File Column</label><input id="verifyFileColumn" value="H" placeholder="H"></div>
           <div><label>Extension Column</label><input id="verifyExtensionColumn" value="" placeholder="optional"></div>
         </div>
         <div class="grid-2">
-          <div><label>RootID Column</label><input id="verifyRootIdColumn" value="C" placeholder="C"></div>
+          <div><label class="required-label">RootID Column</label><input id="verifyRootIdColumn" class="mandatory-field" value="C" placeholder="C"></div>
           <div><label>Batch Size</label><input id="verifyBatchSize" value="50" type="number" min="1"></div>
         </div>
         <label>Trigger Gap</label>
@@ -218,7 +358,7 @@
       </div>
 
       <div class="section">
-        <div class="section-title">Verify Output</div>
+        <div class="section-title">Verify Output</div><div class="mandatory-note">* Exists is mandatory for Verify; post-execution requirements follow Source Object Mode</div>
         <div class="mapping-tools">
           <button type="button" data-action="select-all" data-group="verify">Select All</button>
           <button type="button" data-action="clear-all" data-group="verify">Clear All</button>
@@ -226,27 +366,11 @@
         <div id="verifyMapping"></div>
       </div>
 
-      <div class="section">
-        <div class="section-title">Shared Output</div>
-        <div class="hint">Shared across Verify and Resolve.</div>
-        <div class="mapping-tools">
-          <button type="button" data-action="select-all" data-group="shared">Select All</button>
-          <button type="button" data-action="clear-all" data-group="shared">Clear All</button>
-        </div>
-        <div id="verifySharedMapping"></div>
-      </div>
-
-      <button class="primary" id="runVerifyButton" type="button">Run Verify</button>
       <div class="message" id="verifyMessage">Ready.</div>
     </div>
 
     <div id="resolveView" class="view">
-      <div class="button-row">
-        <button id="backFromResolveButton" type="button">← Home</button>
-        <button id="goVerifyFromResolveButton" type="button">Go Verify →</button>
-      </div>
-
-      <div class="section">
+<div class="section">
         <div class="section-title">Status</div>
         <div class="status-row"><div class="label">Engine</div><div class="value" id="resolveStatus">-</div></div>
         <div class="status-row"><div class="label">Mode</div><div class="value" id="resolveMode">-</div></div>
@@ -261,14 +385,14 @@
 
       <div class="section">
         <div class="section-title">Resolve Config</div>
-        <label>Path Column(s)</label>
-        <input id="resolvePathColumns" value="D-G" placeholder="D, D-G, D,E,G">
+        <label class="required-label">Path Column(s)</label>
+        <input id="resolvePathColumns" class="mandatory-field" value="D-G" placeholder="D, D-G, D,E,G">
         <div class="grid-2">
           <div><label>File Column</label><input id="resolveFileColumn" value="H" placeholder="H / optional"></div>
           <div><label>Extension Column</label><input id="resolveExtensionColumn" value="" placeholder="optional"></div>
         </div>
         <div class="grid-2">
-          <div><label>RootID Column</label><input id="resolveRootIdColumn" value="C" placeholder="C"></div>
+          <div><label class="required-label">RootID Column</label><input id="resolveRootIdColumn" class="mandatory-field" value="C" placeholder="C"></div>
           <div><label>Batch Size</label><input id="resolveBatchSize" value="100" type="number" min="1"></div>
         </div>
         <label>Trigger Gap</label>
@@ -276,7 +400,7 @@
       </div>
 
       <div class="section">
-        <div class="section-title">Resolve Output</div>
+        <div class="section-title">Resolve Output</div><div class="hint">Resolve evidence fields are optional; mapped fields are still written.</div>
         <div class="mapping-tools">
           <button type="button" data-action="select-all" data-group="resolve">Select All</button>
           <button type="button" data-action="clear-all" data-group="resolve">Clear All</button>
@@ -284,28 +408,12 @@
         <div id="resolveMapping"></div>
       </div>
 
-      <div class="section">
-        <div class="section-title">Shared Output</div>
-        <div class="hint">Shared across Verify and Resolve.</div>
-        <div class="mapping-tools">
-          <button type="button" data-action="select-all" data-group="shared">Select All</button>
-          <button type="button" data-action="clear-all" data-group="shared">Clear All</button>
-        </div>
-        <div id="resolveSharedMapping"></div>
-      </div>
-
-      <button class="primary" id="runResolveButton" type="button">Run Resolve</button>
       <div class="message" id="resolveMessage">Ready.</div>
     </div>
 
 
     <div id="actionView" class="view">
-      <div class="button-row">
-        <button id="backFromActionButton" type="button">← Home</button>
-        <button id="goVerifyFromActionButton" type="button">Go Verify →</button>
-      </div>
-
-      <div class="section">
+<div class="section">
         <div class="section-title">Status</div>
         <div class="status-row"><div class="label">Engine</div><div class="value" id="actionStatus">-</div></div>
         <div class="status-row"><div class="label">Mode</div><div class="value" id="actionMode">-</div></div>
@@ -320,19 +428,50 @@
 
       <div class="section">
         <div class="section-title">Action Config</div>
+
+        <label class="required-label">Source Object Mode</label>
+        <select id="actionSourceObjectMode" class="mandatory-field">
+          <option value="FILE">FILE · use Object Result FileID</option>
+          <option value="FOLDER">FOLDER · use Object Result PathID</option>
+        </select>
+
         <div class="grid-2">
-          <div><label>Source ObjectID Column</label><input id="actionSourceObjectIdColumn" value="R" placeholder="R"></div>
-          <div><label>Operation Column</label><input id="actionOperationColumn" value="AE" placeholder="AE"></div>
+          <div><label class="required-label">Object Result PathID</label><input id="actionSourcePathIdColumn" class="mandatory-field" readonly></div>
+          <div><label id="actionSourceFileIdLabel" class="required-label">Object Result FileID</label><input id="actionSourceFileIdColumn" class="mandatory-field" readonly></div>
         </div>
+
+        <label class="required-label">Operation Source</label>
+        <select id="actionOperationMode" class="mandatory-field">
+          <option value="SINGLE">Single Operation</option>
+          <option value="COLUMN">Operation by Column</option>
+        </select>
+
+        <div id="actionSingleOperationBlock">
+          <label class="required-label">Operation</label>
+          <select id="actionOperationValue" class="mandatory-field">
+            <option value="MOVE">MOVE</option>
+            <option value="RENAME">RENAME</option>
+            <option value="MOVE_RENAME">MOVE_RENAME</option>
+            <option value="COPY">COPY</option>
+            <option value="COPY_RENAME">COPY_RENAME</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </div>
+
+        <div id="actionOperationColumnBlock" class="hidden">
+          <label class="required-label">Operation Column</label>
+          <input id="actionOperationColumn" class="mandatory-field" value="I" placeholder="I">
+        </div>
+
         <div class="grid-2">
-          <div><label>Target Column</label><input id="actionTargetColumn" value="G" placeholder="full target object path"></div>
-          <div><label>RootID Column</label><input id="actionRootIdColumn" value="C" placeholder="C"></div>
+          <div><label class="required-label">Target Column</label><input id="actionTargetColumn" class="mandatory-field" value="G" placeholder="full target object path"></div>
+          <div><label class="required-label">RootID Column</label><input id="actionRootIdColumn" class="mandatory-field" value="C" placeholder="C"></div>
         </div>
         <div class="grid-2">
           <div><label>Batch Size</label><input id="actionBatchSize" value="50" type="number" min="1"></div>
           <div><label>Trigger Gap</label><input id="actionTriggerGap" value="5" type="number" min="5"></div>
         </div>
-        <div class="hint">Input model: ObjectID + Operation + full Target path. Use a helper column when choosing between FileID and PathID.</div>
+        <div class="hint">Action reads PathID/FileID from Object Result. Operation can be uniform from this UI or read per row from a spreadsheet column.</div>
       </div>
 
       <div class="section">
@@ -344,20 +483,48 @@
         <div id="actionMapping"></div>
       </div>
 
-      <button class="primary" id="runActionButton" type="button">Run Action Preview</button>
       <div class="message" id="actionMessage">Ready. Dry-run only.</div>
     </div>
 
-    <div id="pipelineView" class="view">
-      <div class="button-row">
-        <button id="backFromPipelineButton" type="button">← Home</button>
-        <button id="goVerifyFromPipelineButton" type="button">Go Verify →</button>
+
+    <div id="workflowView" class="view">
+      <div class="section">
+        <div class="section-title">Workflow Output</div>
+        <div class="hint">Object Result and Workflow Result are configured once here and reused by all phases.</div>
       </div>
 
       <div class="section">
-        <div class="section-title">Status</div>
-        <div class="status-row"><div class="label">Engine</div><div class="value" id="pipelineStatus">-</div></div>
-        <div class="status-row"><div class="label">Mode</div><div class="value" id="pipelineMode">-</div></div>
+        <div class="section-title">Object Result</div><div class="mandatory-note" id="objectResultMandatoryNote">* FILE requires FileID and PathID; FOLDER requires PathID</div>
+        <div class="mapping-tools">
+          <button type="button" data-action="select-all" data-group="workflowShared">Select All</button>
+          <button type="button" data-action="clear-all" data-group="workflowShared">Clear All</button>
+        </div>
+        <div id="workflowSharedMapping"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Workflow Result</div>
+        <div class="mandatory-note">* Workflow Status is mandatory for Real Execution</div>
+        <div class="mapping-tools">
+          <button type="button" data-action="select-all" data-group="workflowPipeline">Select All</button>
+          <button type="button" data-action="clear-all" data-group="workflowPipeline">Clear All</button>
+        </div>
+        <div id="workflowPipelineMapping"></div>
+      </div>
+    </div>
+
+    <div id="pipelineView" class="view">
+      <div class="section">
+        <div class="section-title">Multi-Phase</div>
+        <div class="hint">Settings are taken from Verify, Resolve, Action, and Workflow Output pages.</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Phases</div>
+        <label class="phase-choice"><input id="pipelineRunVerify" type="checkbox" checked> Verify</label>
+        <label class="phase-choice"><input id="pipelineRunResolve" type="checkbox" checked> Resolve fallback</label>
+        <label class="phase-choice"><input id="pipelineRunAction" type="checkbox" checked> Action Preview</label>
+        <div class="hint" id="pipelineDependencyMessage">Verify is required when Resolve or Action Preview is selected.</div>
       </div>
 
       <div class="section">
@@ -367,84 +534,42 @@
         <div class="status-row"><div class="label">Rows</div><div class="value" id="pipelineSelectionRows">-</div></div>
       </div>
 
-      <div class="section">
-        <div class="section-title">Verify & Resolve Input</div>
-        <label>Path Column(s)</label>
-        <input id="pipelinePathColumns" value="D-G" placeholder="D, D-G, D,E,G">
-        <div class="grid-2">
-          <div><label>File Column</label><input id="pipelineFileColumn" value="H" placeholder="H"></div>
-          <div><label>Extension Column</label><input id="pipelineExtensionColumn" value="" placeholder="optional"></div>
-        </div>
-        <label>RootID Column</label>
-        <input id="pipelineRootIdColumn" value="C" placeholder="C">
-      </div>
+    </div>
 
-      <div class="section">
-        <div class="section-title">Action Input</div>
-        <div class="grid-2">
-          <div><label>Verified SourceObjectID Column</label><input id="pipelineSourceObjectIdColumn" value="R" placeholder="R"></div>
-          <div><label>Operation Column</label><input id="pipelineOperationColumn" value="AE" placeholder="AE"></div>
-        </div>
-        <label>Target Column</label>
-        <input id="pipelineTargetColumn" value="G" placeholder="full target object path">
-        <div class="hint">Verified source remains explicit. Resolve only becomes fallback when this column is empty.</div>
-      </div>
 
-      <div class="section">
-        <div class="section-title">Engine Config</div>
-        <div class="grid-2">
-          <div><label>Batch Size</label><input id="pipelineBatchSize" value="50" type="number" min="1"></div>
-          <div><label>Trigger Gap</label><input id="pipelineTriggerGap" value="5" type="number" min="5"></div>
+    <div id="executionView" class="view">
+      <div class="section"><div class="section-title">Real Execution</div><div class="hint">Execution inputs are linked from the current workflow configuration. Target Column is linked directly from Action Config and is validated again at runtime.</div>
+        <div class="mandatory-note" id="executionPostVerifyMandatoryNote">* FILE post-Verify requires Exists, Type, MatchedPathColumn, FileID, PathID, and Object Result IDs</div>
+        <div class="grid-2"><div><label class="required-label">Workflow Status Column</label><input id="executionPlanStatusColumn" class="mandatory-field" readonly></div><div><label class="required-label">Operation Column</label><input id="executionOperationColumn" class="mandatory-field" readonly></div></div>
+        <label class="required-label">Source Object Mode</label><input id="executionSourceObjectMode" class="mandatory-field" readonly>
+        <div class="grid-2"><div><label class="required-label">Object Result PathID</label><input id="executionSourcePathIdColumn" class="mandatory-field" readonly></div><div><label id="executionSourceFileIdLabel" class="required-label">Object Result FileID</label><input id="executionSourceFileIdColumn" class="mandatory-field" readonly></div></div>
+        <div class="grid-2"><div><label class="required-label">Target Column</label><input id="executionTargetColumn" class="mandatory-field" readonly></div><div><label class="required-label">RootID Column</label><input id="executionRootIdColumn" class="mandatory-field" readonly></div></div>
+        <div><label>Batch Size</label><input id="executionBatchSize" value="10" type="number" min="1" max="50"></div>
+        <label>Cleanup Mode</label>
+        <select id="executionCleanupMode">
+          <option value="NONE">NONE</option>
+          <option value="EMPTY_SOURCE_PARENT">EMPTY SOURCE PARENT</option>
+          <option value="EMPTY_SOURCE_ANCESTORS" selected>EMPTY SOURCE ANCESTORS TO ROOT</option>
+        </select>
+      </div>
+      <div class="section"><div class="section-title">Execution Output</div>
+        <div class="grid-2"><div><label class="required-label">Status</label><input id="executionStatusOutput" class="mandatory-field" value="AT"></div><div><label>Run ID</label><input id="executionRunIdOutput" value="AU"></div></div>
+        <div class="grid-2"><div><label>Executed At</label><input id="executionExecutedAtOutput" value="AV"></div><div><label class="required-label">Note</label><input id="executionNoteOutput" class="mandatory-field" value="AW"></div></div>
+      </div>
+      <div class="message" id="executionMessage">Validate first. Real mutation is irreversible except through manual recovery.</div>
+    </div>
+
+    <div id="executionConfirmationModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="executionConfirmationTitle" aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-title" id="executionConfirmationTitle">Execution Confirmation</div>
+        <div class="hint">Type EXECUTE to continue</div>
+        <input id="executionConfirmationInput" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div id="executionConfirmationError" class="modal-error hidden"></div>
+        <div class="button-row">
+          <button id="executionConfirmationCancelButton" type="button">Cancel</button>
+          <button class="danger" id="executionConfirmationConfirmButton" type="button">Confirm</button>
         </div>
       </div>
-
-      <div class="section">
-        <div class="section-title">Verify Output</div>
-        <div class="mapping-tools">
-          <button type="button" data-action="select-all" data-group="pipelineVerify">Select All</button>
-          <button type="button" data-action="clear-all" data-group="pipelineVerify">Clear All</button>
-        </div>
-        <div id="pipelineVerifyMapping"></div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">Resolve Output</div>
-        <div class="mapping-tools">
-          <button type="button" data-action="select-all" data-group="pipelineResolve">Select All</button>
-          <button type="button" data-action="clear-all" data-group="pipelineResolve">Clear All</button>
-        </div>
-        <div id="pipelineResolveMapping"></div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">Shared Output</div>
-        <div class="mapping-tools">
-          <button type="button" data-action="select-all" data-group="pipelineShared">Select All</button>
-          <button type="button" data-action="clear-all" data-group="pipelineShared">Clear All</button>
-        </div>
-        <div id="pipelineSharedMapping"></div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">Action Output</div>
-        <div class="mapping-tools">
-          <button type="button" data-action="select-all" data-group="pipelineAction">Select All</button>
-          <button type="button" data-action="clear-all" data-group="pipelineAction">Clear All</button>
-        </div>
-        <div id="pipelineActionMapping"></div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">Pipeline Output</div>
-        <div class="mapping-tools">
-          <button type="button" data-action="select-all" data-group="pipeline">Select All</button>
-          <button type="button" data-action="clear-all" data-group="pipeline">Clear All</button>
-        </div>
-        <div id="pipelineMapping"></div>
-      </div>
-
-      <button class="primary" id="runPipelineButton" type="button">Run Multi-Phase Preview</button>
-      <div class="message" id="pipelineMessage">Ready. Dry-run only.</div>
     </div>
 
     <script>
@@ -501,20 +626,66 @@
       ];
 
       var pipelineFields = [
-        ['PipelineStatus', 'PipelineStatus'],
-        ['FinalSource', 'FinalSource'],
-        ['FinalSourceObjectID', 'FinalSourceObjectID'],
-        ['FinalSourceType', 'FinalSourceType'],
-        ['FinalSourcePath', 'FinalSourcePath'],
-        ['FinalPhase', 'FinalPhase'],
-        ['PipelineNote', 'PipelineNote']
+        ['PipelineStatus', 'Workflow Status'],
+        ['FinalSource', 'Source Method'],
+        ['FinalSourceObjectID', 'Source ObjectID'],
+        ['FinalSourceType', 'Source Type'],
+        ['FinalSourcePath', 'Source Path'],
+        ['FinalPhase', 'Last Phase'],
+        ['PipelineNote', 'Workflow Note']
       ];
 
-      function byId(id) { return document.getElementById(id); }
-      function valueOf(id) { return byId(id).value.trim(); }
-      function columnValueOf(id) { return normalizeColumnText(byId(id).value); }
-      function setText(id, value) { byId(id).textContent = value || '-'; }
-      function setMessage(id, value) { byId(id).textContent = value || ''; }
+      function byId(id) {
+        return document.getElementById(id);
+      }
+
+      function bindEventIfPresent_(id, eventName, handler) {
+        var element = byId(id);
+        if (!element) return;
+        element.addEventListener(eventName, handler);
+      }
+      function valueOf(id) {
+        var element = byId(id);
+        if (!element) {
+          throw new Error('UI field is missing: ' + id);
+        }
+        return element.value.trim();
+      }
+
+      function columnValueOf(id) {
+        var element = byId(id);
+        if (!element) {
+          throw new Error('UI column field is missing: ' + id);
+        }
+        return normalizeColumnText(element.value);
+      }
+      function setText(id, value) {
+        var element = byId(id);
+        if (!element) return;
+        element.textContent = value || '-';
+      }
+      function setMessage(id, value) {
+        var element = byId(id);
+        if (element) element.textContent = value || '';
+      }
+
+      function showGlobalFeedback(type, message) {
+        var box = byId('globalFeedback');
+        if (!box) return;
+
+        if (!message) {
+          box.className = 'global-feedback hidden';
+          box.textContent = '';
+          return;
+        }
+
+        box.className = 'global-feedback ' + (type || '');
+        box.textContent = message;
+      }
+
+      function hideGlobalFeedback() {
+        showGlobalFeedback('', '');
+      }
       function normalizeColumnText(value) {
         return value ? value.toString().trim().toUpperCase() : '';
       }
@@ -525,12 +696,114 @@
           views[i].classList.remove('active');
         }
         byId(viewId).classList.add('active');
+        byId('globalMenu').classList.add('hidden');
         renderSelectionEverywhere();
         refreshStatus();
       }
 
+      function getMandatoryMappingFields_() {
+        var modeElement = byId('actionSourceObjectMode');
+        var sourceMode = modeElement
+          ? modeElement.value.toUpperCase()
+          : 'FILE';
+
+        return {
+          verify: ['Exists'],
+          resolve: [],
+          workflowShared: sourceMode === 'FOLDER'
+            ? ['SharedPathID']
+            : ['SharedFileID', 'SharedPathID'],
+          action: ['OperationStatus', 'Operation'],
+          workflowPipeline: ['PipelineStatus']
+        };
+      }
+
+      function markMandatoryMappingRows_() {
+        var currentRows = document.querySelectorAll(
+          '.mapping-row.mandatory-mapping'
+        );
+
+        for (var rowIndex = 0; rowIndex < currentRows.length; rowIndex++) {
+          currentRows[rowIndex].classList.remove('mandatory-mapping');
+        }
+
+        var requiredControls = document.querySelectorAll(
+          '[data-map-group][aria-required="true"], ' +
+          '[data-map-column][aria-required="true"]'
+        );
+
+        for (var controlIndex = 0; controlIndex < requiredControls.length; controlIndex++) {
+          requiredControls[controlIndex].removeAttribute('aria-required');
+        }
+
+        var mandatoryMappingFields =
+          getMandatoryMappingFields_();
+
+        var isFileMode =
+          valueOf('actionSourceObjectMode').toUpperCase() !== 'FOLDER';
+
+        ['actionSourceFileIdLabel', 'executionSourceFileIdLabel']
+          .forEach(function(id) {
+            byId(id).classList.toggle('required-label', isFileMode);
+          });
+
+        ['actionSourceFileIdColumn', 'executionSourceFileIdColumn']
+          .forEach(function(id) {
+            byId(id).classList.toggle('mandatory-field', isFileMode);
+            byId(id).setAttribute(
+              'aria-required',
+              isFileMode ? 'true' : 'false'
+            );
+          });
+
+        for (var groupName in mandatoryMappingFields) {
+          if (!Object.prototype.hasOwnProperty.call(mandatoryMappingFields, groupName)) {
+            continue;
+          }
+
+          var keys = mandatoryMappingFields[groupName];
+
+          for (var i = 0; i < keys.length; i++) {
+            var checkbox = document.querySelector(
+              '[data-map-group="' + groupName + '"][data-map-key="' + keys[i] + '"]'
+            );
+
+            if (!checkbox || !checkbox.parentNode) {
+              continue;
+            }
+
+            checkbox.parentNode.classList.add('mandatory-mapping');
+            checkbox.setAttribute('aria-required', 'true');
+            checkbox.checked = true;
+
+            var columnInput = document.querySelector(
+              '[data-map-column="' + groupName + '"][data-map-key="' + keys[i] + '"]'
+            );
+
+            if (columnInput) {
+              columnInput.setAttribute('aria-required', 'true');
+            }
+          }
+        }
+
+        setText(
+          'objectResultMandatoryNote',
+          valueOf('actionSourceObjectMode').toUpperCase() === 'FOLDER'
+            ? '* FOLDER requires PathID; other Object Result fields are optional'
+            : '* FILE requires FileID and PathID; other Object Result fields are optional'
+        );
+
+        setText(
+          'executionPostVerifyMandatoryNote',
+          valueOf('actionSourceObjectMode').toUpperCase() === 'FOLDER'
+            ? '* FOLDER post-Verify requires Exists, Type, MatchedPathColumn, PathID, and Object Result PathID'
+            : '* FILE post-Verify requires Exists, Type, MatchedPathColumn, FileID, PathID, and Object Result FileID/PathID'
+        );
+      }
+
       function createMappingRows(containerId, groupName, fields) {
         var container = byId(containerId);
+        if (!container) return;
         container.innerHTML = '';
         for (var i = 0; i < fields.length; i++) {
           var key = fields[i][0];
@@ -546,24 +819,20 @@
       }
 
       var linkedInputGroups = [
-        ['verifyPathColumns', 'resolvePathColumns', 'pipelinePathColumns'],
-        ['verifyFileColumn', 'resolveFileColumn', 'pipelineFileColumn'],
-        ['verifyExtensionColumn', 'resolveExtensionColumn', 'pipelineExtensionColumn'],
-        ['verifyRootIdColumn', 'resolveRootIdColumn', 'actionRootIdColumn', 'pipelineRootIdColumn'],
-        ['actionSourceObjectIdColumn', 'pipelineSourceObjectIdColumn'],
-        ['actionOperationColumn', 'pipelineOperationColumn'],
-        ['actionTargetColumn', 'pipelineTargetColumn']
+        ['verifyPathColumns', 'resolvePathColumns'],
+        ['verifyFileColumn', 'resolveFileColumn'],
+        ['verifyExtensionColumn', 'resolveExtensionColumn'],
+        ['verifyRootIdColumn', 'resolveRootIdColumn', 'actionRootIdColumn'],
+        ['actionOperationColumn'],
+        ['actionTargetColumn']
       ];
 
       var linkedMappingGroups = {
-        verify: ['verify', 'pipelineVerify'],
-        pipelineVerify: ['verify', 'pipelineVerify'],
-        resolve: ['resolve', 'pipelineResolve'],
-        pipelineResolve: ['resolve', 'pipelineResolve'],
-        shared: ['shared', 'pipelineShared'],
-        pipelineShared: ['shared', 'pipelineShared'],
-        action: ['action', 'pipelineAction'],
-        pipelineAction: ['action', 'pipelineAction']
+        verify: ['verify'],
+        resolve: ['resolve'],
+        workflowShared: ['workflowShared'],
+        action: ['action'],
+        workflowPipeline: ['workflowPipeline']
       };
 
       function getLinkedMappingGroups(groupName) {
@@ -575,6 +844,14 @@
         var groupName = source.getAttribute('data-map-group') || source.getAttribute('data-map-column');
         var key = source.getAttribute('data-map-key');
         if (!groupName || !key) return;
+
+        if (
+          source.hasAttribute('data-map-group') &&
+          source.getAttribute('aria-required') === 'true' &&
+          !source.checked
+        ) {
+          source.checked = true;
+        }
 
         var groups = getLinkedMappingGroups(groupName);
         var i;
@@ -597,6 +874,8 @@
         }
 
         scheduleUiSettingsSave_();
+        syncActionSourceColumns_();
+        syncExecutionFromPipeline_();
       }
 
       function bindLinkedMappings() {
@@ -619,6 +898,8 @@
                   if (ids[k] !== this.id && byId(ids[k])) byId(ids[k]).value = value;
                 }
                 scheduleUiSettingsSave_();
+                syncActionSourceColumns_();
+            syncExecutionFromPipeline_();
               });
             }
           })(linkedInputGroups[i]);
@@ -629,14 +910,10 @@
         createMappingRows('verifyMapping', 'verify', verifyFields);
         createMappingRows('resolveMapping', 'resolve', resolveFields);
         createMappingRows('actionMapping', 'action', actionFields);
-        createMappingRows('verifySharedMapping', 'shared', sharedFields);
-        createMappingRows('resolveSharedMapping', 'shared', sharedFields);
-        createMappingRows('pipelineVerifyMapping', 'pipelineVerify', verifyFields);
-        createMappingRows('pipelineResolveMapping', 'pipelineResolve', resolveFields);
-        createMappingRows('pipelineSharedMapping', 'pipelineShared', sharedFields);
-        createMappingRows('pipelineActionMapping', 'pipelineAction', actionFields);
-        createMappingRows('pipelineMapping', 'pipeline', pipelineFields);
+        createMappingRows('workflowSharedMapping', 'workflowShared', sharedFields);
+        createMappingRows('workflowPipelineMapping', 'workflowPipeline', pipelineFields);
 
+        markMandatoryMappingRows_();
         bindLinkedMappings();
         bindUppercaseColumnInputs();
         bindLinkedInputs();
@@ -652,19 +929,20 @@
           '#resolveFileColumn',
           '#resolveExtensionColumn',
           '#resolveRootIdColumn',
-          '#actionSourceObjectIdColumn',
+          '#actionOperationColumn',
           '#actionOperationColumn',
           '#actionTargetColumn',
           '#actionRootIdColumn',
           '#remapFromColumn',
           '#remapToColumn',
-          '#pipelinePathColumns',
-          '#pipelineFileColumn',
-          '#pipelineExtensionColumn',
-          '#pipelineRootIdColumn',
-          '#pipelineSourceObjectIdColumn',
-          '#pipelineOperationColumn',
-          '#pipelineTargetColumn',
+          '#executionPlanStatusColumn',
+          '#executionOperationColumn',
+          '#executionTargetColumn',
+          '#executionRootIdColumn',
+          '#executionStatusOutput',
+          '#executionRunIdOutput',
+          '#executionExecutedAtOutput',
+          '#executionNoteOutput',
           '[data-map-column]'
         ];
 
@@ -728,6 +1006,7 @@
 
       function clearAllMapping(groupName) {
         setAllMappingChecks(groupName, false);
+        markMandatoryMappingRows_();
         scheduleUiSettingsSave_();
       }
 
@@ -832,16 +1111,22 @@
           'verifyBatchSize','verifyTriggerGap',
           'resolvePathColumns','resolveFileColumn','resolveExtensionColumn','resolveRootIdColumn',
           'resolveBatchSize','resolveTriggerGap',
-          'actionSourceObjectIdColumn','actionOperationColumn','actionTargetColumn','actionRootIdColumn',
-          'actionBatchSize','actionTriggerGap',
-          'pipelinePathColumns','pipelineFileColumn','pipelineExtensionColumn','pipelineRootIdColumn',
-          'pipelineSourceObjectIdColumn','pipelineOperationColumn','pipelineTargetColumn',
-          'pipelineBatchSize','pipelineTriggerGap'
+          'actionSourcePathIdColumn','actionSourceFileIdColumn','actionSourceObjectMode',
+          'actionOperationMode','actionOperationValue','actionOperationColumn','actionTargetColumn','actionRootIdColumn',
+          'actionBatchSize','actionTriggerGap','actionSourceObjectMode',
+          'actionSourceObjectMode',
+          'pipelineBatchSize','pipelineTriggerGap',
+          'executionCleanupMode',
+          'executionPlanStatusColumn','executionOperationColumn','executionSourceObjectMode',
+          'executionSourcePathIdColumn','executionSourceFileIdColumn',
+          'executionTargetColumn','executionRootIdColumn','executionBatchSize',
+          'executionStatusOutput','executionRunIdOutput','executionExecutedAtOutput',
+          'executionNoteOutput'
         ];
       }
 
       function isColumnSettingInput_(id) {
-        return !/BatchSize$|TriggerGap$/.test(id);
+        return !/BatchSize$|TriggerGap$|SourceObjectMode$|CleanupMode$/.test(id);
       }
 
       function captureUiSnapshot_() {
@@ -854,7 +1139,7 @@
           if (!element) continue;
           snapshot.inputs[id] = isColumnSettingInput_(id)
             ? normalizeColumnText(element.value)
-            : element.value.toString().trim();
+            : element.value.toString().trim().toUpperCase();
         }
 
         var mapInputs = document.querySelectorAll('[data-map-column]');
@@ -1061,6 +1346,8 @@
 
             mappingsReady = true;
             byId('undoRemapButton').disabled = !lastRemapSnapshot || engineRunning || startRequestPending;
+            markMandatoryMappingRows_();
+            syncExecutionFromPipeline_();
             setMessage('homeMessage', 'Ready.');
             refreshStatus();
           })
@@ -1068,6 +1355,7 @@
             uiSettingsReady = false;
             mappingsReady = true;
             byId('undoRemapButton').disabled = !lastRemapSnapshot || engineRunning || startRequestPending;
+            markMandatoryMappingRows_();
             setMessage('homeMessage', 'Mappings loaded, but saved UI settings could not be loaded: ' + (err && err.message ? err.message : err));
             refreshStatus();
           })
@@ -1090,13 +1378,15 @@
 
             setMapping('verify', settings.verify || {});
             setMapping('resolve', settings.resolve || {});
-            setMapping('shared', settings.shared || {});
             setMapping('action', settings.action || {});
-            setMapping('pipelineVerify', settings.verify || {});
-            setMapping('pipelineResolve', settings.resolve || {});
-            setMapping('pipelineShared', settings.shared || {});
-            setMapping('pipelineAction', settings.action || {});
-            setMapping('pipeline', settings.pipeline || {});
+            setMapping(
+              'workflowShared',
+              settings.workflow || settings.shared || {}
+            );
+            setMapping(
+              'workflowPipeline',
+              settings.workflow || settings.pipeline || {}
+            );
 
             setMessage('homeMessage', 'Loading saved UI settings...');
             loadUiSettings();
@@ -1198,6 +1488,14 @@
       }
 
       function buildVerifyConfig() {
+        var verifyMapping = getMapping('verify');
+
+        requireFrontendMappingFields_(
+          verifyMapping,
+          ['Exists'],
+          'Verify Output'
+        );
+
         return attachSelection({
           pathColumns: columnValueOf('verifyPathColumns'),
           fileColumn: columnValueOf('verifyFileColumn'),
@@ -1205,8 +1503,8 @@
           rootIdColumn: columnValueOf('verifyRootIdColumn'),
           batchSize: valueOf('verifyBatchSize'),
           triggerGapMinutes: valueOf('verifyTriggerGap'),
-          verifyOutputMapping: getMapping('verify'),
-          sharedOutputMapping: getMapping('shared')
+          verifyOutputMapping: verifyMapping,
+          sharedOutputMapping: getMapping('workflowShared')
         });
       }
 
@@ -1219,19 +1517,60 @@
           batchSize: valueOf('resolveBatchSize'),
           triggerGapMinutes: valueOf('resolveTriggerGap'),
           resolveOutputMapping: getMapping('resolve'),
-          sharedOutputMapping: getMapping('shared')
+          sharedOutputMapping: getMapping('workflowShared')
         });
       }
 
+      function syncActionSourceColumns_() {
+        byId('actionSourcePathIdColumn').value =
+          getMappingColumn_('workflowShared', 'SharedPathID');
+        byId('actionSourceFileIdColumn').value =
+          getMappingColumn_('workflowShared', 'SharedFileID');
+      }
+
+      function updateActionOperationUi_() {
+        var mode = valueOf('actionOperationMode').toUpperCase();
+        byId('actionSingleOperationBlock').classList.toggle('hidden', mode !== 'SINGLE');
+        byId('actionOperationColumnBlock').classList.toggle('hidden', mode !== 'COLUMN');
+      }
+
       function buildActionConfig() {
+        syncActionSourceColumns_();
+        updateActionOperationUi_();
+
+        var sourceMode =
+          valueOf('actionSourceObjectMode').toUpperCase();
+        var actionMapping = getMapping('action');
+        var sharedMapping = getMapping('workflowShared');
+
+        requireFrontendMappingFields_(
+          actionMapping,
+          ['OperationStatus', 'Operation'],
+          'Action Output'
+        );
+
+        requireFrontendMappingFields_(
+          sharedMapping,
+          sourceMode === 'FOLDER'
+            ? ['SharedPathID']
+            : ['SharedFileID', 'SharedPathID'],
+          'Object Result'
+        );
+
         return attachSelection({
-          sourceObjectIdColumn: columnValueOf('actionSourceObjectIdColumn'),
-          operationColumn: columnValueOf('actionOperationColumn'),
+          sourcePathIdColumn: columnValueOf('actionSourcePathIdColumn'),
+          sourceFileIdColumn: columnValueOf('actionSourceFileIdColumn'),
+          sourceObjectMode: sourceMode,
+          operationMode: valueOf('actionOperationMode'),
+          operationValue: valueOf('actionOperationValue'),
+          operationColumn: valueOf('actionOperationMode').toUpperCase() === 'COLUMN'
+            ? columnValueOf('actionOperationColumn')
+            : '',
           targetColumn: columnValueOf('actionTargetColumn'),
           rootIdColumn: columnValueOf('actionRootIdColumn'),
           batchSize: valueOf('actionBatchSize'),
           triggerGapMinutes: valueOf('actionTriggerGap'),
-          actionOutputMapping: getMapping('action')
+          actionOutputMapping: actionMapping
         });
       }
 
@@ -1240,6 +1579,29 @@
           if (Object.prototype.hasOwnProperty.call(mapping, key) && mapping[key]) return true;
         }
         return false;
+      }
+
+      function requireFrontendMappingFields_(
+        mapping,
+        requiredFields,
+        label
+      ) {
+        var missing = [];
+
+        for (var i = 0; i < requiredFields.length; i++) {
+          if (!mapping[requiredFields[i]]) {
+            missing.push(requiredFields[i]);
+          }
+        }
+
+        if (missing.length) {
+          throw new Error(
+            label +
+            ' mapping is required for: ' +
+            missing.join(', ') +
+            '.'
+          );
+        }
       }
 
       function mergeMappings() {
@@ -1255,71 +1617,170 @@
         return result;
       }
 
+      function enforcePipelineDependencies_() {
+        var runResolve = byId('pipelineRunResolve').checked;
+        var runAction = byId('pipelineRunAction').checked;
+        var verify = byId('pipelineRunVerify');
+
+        if (runResolve || runAction) {
+          verify.checked = true;
+          verify.disabled = true;
+          setText(
+            'pipelineDependencyMessage',
+            'Verify was enabled automatically because Resolve or Action Preview depends on it.'
+          );
+        } else {
+          verify.disabled = false;
+          setText(
+            'pipelineDependencyMessage',
+            'Select at least one phase.'
+          );
+        }
+      }
+
       function buildPipelineConfig() {
         if (!mappingsReady) {
-          throw new Error('Output mapping settings are still loading. Wait until Home status shows Ready.');
+          throw new Error(
+            'Output mappings are still loading.'
+          );
         }
 
-        var batchSize = valueOf('pipelineBatchSize');
-        var triggerGapMinutes = valueOf('pipelineTriggerGap');
-        var verifyMapping = getMapping('pipelineVerify');
-        var resolveMapping = getMapping('pipelineResolve');
-        var sharedMapping = getMapping('pipelineShared');
-        var actionMapping = getMapping('pipelineAction');
-        var pipelineMapping = getMapping('pipeline');
+        enforcePipelineDependencies_();
+        updateActionOperationUi_();
+        syncActionSourceColumns_();
 
-        if (!hasSelectedOutput(verifyMapping)) {
-          throw new Error('At least one Verify output field must be selected.');
-        }
-        if (!hasSelectedOutput(resolveMapping)) {
-          throw new Error('At least one Resolve output field must be selected.');
-        }
-        if (!hasSelectedOutput(actionMapping)) {
-          throw new Error('At least one Action output field must be selected.');
-        }
-
-        var base = {
-          pathColumns: columnValueOf('pipelinePathColumns'),
-          fileColumn: columnValueOf('pipelineFileColumn'),
-          extensionColumn: columnValueOf('pipelineExtensionColumn'),
-          rootIdColumn: columnValueOf('pipelineRootIdColumn'),
-          batchSize: batchSize,
-          triggerGapMinutes: triggerGapMinutes
+        var phases = {
+          verify: byId('pipelineRunVerify').checked,
+          resolve: byId('pipelineRunResolve').checked,
+          action: byId('pipelineRunAction').checked
         };
 
+        if (
+          !phases.verify &&
+          !phases.resolve &&
+          !phases.action
+        ) {
+          throw new Error(
+            'Select at least one Multi-Phase phase.'
+          );
+        }
+
+        var verifyMapping =
+          getMapping('verify');
+
+        var resolveMapping =
+          getMapping('resolve');
+
+        var sharedMapping =
+          getMapping('workflowShared');
+
+        var actionMapping =
+          getMapping('action');
+
+        var pipelineMapping =
+          getMapping('workflowPipeline');
+
+        var sourceMode =
+          valueOf('actionSourceObjectMode').toUpperCase();
+
+        if (phases.verify) {
+          requireFrontendMappingFields_(
+            verifyMapping,
+            ['Exists'],
+            'Verify Output'
+          );
+        }
+
+        if (phases.resolve || phases.action) {
+          requireFrontendMappingFields_(
+            sharedMapping,
+            sourceMode === 'FOLDER'
+              ? ['SharedPathID']
+              : ['SharedFileID', 'SharedPathID'],
+            'Object Result'
+          );
+        }
+
+        if (phases.action) {
+          requireFrontendMappingFields_(
+            actionMapping,
+            ['OperationStatus', 'Operation'],
+            'Action Output'
+          );
+          requireFrontendMappingFields_(
+            pipelineMapping,
+            ['PipelineStatus'],
+            'Workflow Result'
+          );
+        }
+
         var verify = attachSelection({
-          pathColumns: base.pathColumns,
-          fileColumn: base.fileColumn,
-          extensionColumn: base.extensionColumn,
-          rootIdColumn: base.rootIdColumn,
-          batchSize: batchSize,
-          triggerGapMinutes: triggerGapMinutes,
-          verifyOutputMapping: verifyMapping,
-          sharedOutputMapping: sharedMapping
+          pathColumns:
+            columnValueOf('verifyPathColumns'),
+          fileColumn:
+            columnValueOf('verifyFileColumn'),
+          extensionColumn:
+            columnValueOf('verifyExtensionColumn'),
+          rootIdColumn:
+            columnValueOf('verifyRootIdColumn'),
+          batchSize:
+            valueOf('verifyBatchSize'),
+          triggerGapMinutes:
+            valueOf('verifyTriggerGap'),
+          verifyOutputMapping:
+            verifyMapping,
+          sharedOutputMapping:
+            sharedMapping
         });
 
         var resolve = attachSelection({
-          pathColumns: base.pathColumns,
-          fileColumn: base.fileColumn,
-          extensionColumn: base.extensionColumn,
-          rootIdColumn: base.rootIdColumn,
-          batchSize: batchSize,
-          triggerGapMinutes: triggerGapMinutes,
-          resolveOutputMapping: resolveMapping,
-          sharedOutputMapping: sharedMapping
+          pathColumns:
+            columnValueOf('resolvePathColumns'),
+          fileColumn:
+            columnValueOf('resolveFileColumn'),
+          extensionColumn:
+            columnValueOf('resolveExtensionColumn'),
+          rootIdColumn:
+            columnValueOf('resolveRootIdColumn'),
+          batchSize:
+            valueOf('resolveBatchSize'),
+          triggerGapMinutes:
+            valueOf('resolveTriggerGap'),
+          resolveOutputMapping:
+            resolveMapping,
+          sharedOutputMapping:
+            sharedMapping
         });
+
+        syncActionSourceColumns_();
+        updateActionOperationUi_();
 
         var action = attachSelection({
-          sourceObjectIdColumn: columnValueOf('pipelineSourceObjectIdColumn'),
-          operationColumn: columnValueOf('pipelineOperationColumn'),
-          targetColumn: columnValueOf('pipelineTargetColumn'),
-          rootIdColumn: base.rootIdColumn,
-          batchSize: batchSize,
-          triggerGapMinutes: triggerGapMinutes,
-          actionOutputMapping: mergeMappings(actionMapping, pipelineMapping)
+          sourcePathIdColumn: columnValueOf('actionSourcePathIdColumn'),
+          sourceFileIdColumn: columnValueOf('actionSourceFileIdColumn'),
+          sourceObjectMode: sourceMode,
+          operationMode: valueOf('actionOperationMode'),
+          operationValue: valueOf('actionOperationValue'),
+          operationColumn: valueOf('actionOperationMode').toUpperCase() === 'COLUMN'
+            ? columnValueOf('actionOperationColumn')
+            : '',
+          targetColumn: columnValueOf('actionTargetColumn'),
+          rootIdColumn: columnValueOf('actionRootIdColumn'),
+          batchSize: valueOf('actionBatchSize'),
+          triggerGapMinutes: valueOf('actionTriggerGap'),
+          actionOutputMapping: actionMapping
         });
 
-        return { verify: verify, resolve: resolve, action: action };
+        return {
+          verify: verify,
+          resolve: resolve,
+          action: action,
+          workflowSharedMapping:
+            sharedMapping,
+          workflowPipelineMapping:
+            pipelineMapping,
+          phases: phases
+        };
       }
 
       function setBusy(isBusy) {
@@ -1328,6 +1789,9 @@
         byId('runResolveButton').disabled = disableRun;
         byId('runActionButton').disabled = disableRun;
         byId('runPipelineButton').disabled = disableRun;
+        var validateButton = byId('validateExecutionButton');
+        if (validateButton) validateButton.disabled = isBusy;
+        byId('runExecutionButton').disabled = isBusy;
       }
 
       function setLocalRunningStatus(mode) {
@@ -1371,22 +1835,26 @@
         setText('resolveMode', status.mode);
         setText('actionStatus', status.status);
         setText('actionMode', status.mode);
-        setText('pipelineStatus', status.status);
-        setText('pipelineMode', status.mode);
       }
 
       function runVerify() {
         var config;
         try { config = buildVerifyConfig(); }
-        catch (err) { setMessage('verifyMessage', err.message); return; }
+        catch (err) {
+          setMessage('verifyMessage', err.message);
+          showGlobalFeedback('error', err.message);
+          return;
+        }
         setBusy(true);
         setMessage('verifyMessage', 'Starting Verify...');
+        showGlobalFeedback('running', 'Starting Verify...');
         setLocalRunningStatus('VERIFY');
         startPolling();
         google.script.run
           .withSuccessHandler(function(result) {
             startRequestPending = false;
             setMessage('verifyMessage', result && result.message ? result.message : 'Verify automation started.');
+            showGlobalFeedback('running', result && result.message ? result.message : 'Verify automation started.');
             refreshStatus();
             startPolling();
           })
@@ -1394,6 +1862,7 @@
             startRequestPending = false;
             setBusy(false);
             setMessage('verifyMessage', err && err.message ? err.message : 'Failed to start Verify.');
+            showGlobalFeedback('error', err && err.message ? err.message : 'Failed to start Verify.');
           })
           .START_VERIFY_FROM_SIDEBAR(config);
       }
@@ -1401,15 +1870,21 @@
       function runResolve() {
         var config;
         try { config = buildResolveConfig(); }
-        catch (err) { setMessage('resolveMessage', err.message); return; }
+        catch (err) {
+          setMessage('resolveMessage', err.message);
+          showGlobalFeedback('error', err.message);
+          return;
+        }
         setBusy(true);
         setMessage('resolveMessage', 'Starting Resolve...');
+        showGlobalFeedback('running', 'Starting Resolve...');
         setLocalRunningStatus('RESOLVE');
         startPolling();
         google.script.run
           .withSuccessHandler(function(result) {
             startRequestPending = false;
             setMessage('resolveMessage', result && result.message ? result.message : 'Resolve automation started.');
+            showGlobalFeedback('running', result && result.message ? result.message : 'Resolve automation started.');
             refreshStatus();
             startPolling();
           })
@@ -1417,6 +1892,7 @@
             startRequestPending = false;
             setBusy(false);
             setMessage('resolveMessage', err && err.message ? err.message : 'Failed to start Resolve.');
+            showGlobalFeedback('error', err && err.message ? err.message : 'Failed to start Resolve.');
           })
           .START_RESOLVE_FROM_SIDEBAR(config);
       }
@@ -1424,21 +1900,28 @@
       function runAction() {
         var config;
         try { config = buildActionConfig(); }
-        catch (err) { setMessage('actionMessage', err.message); return; }
+        catch (err) {
+          setMessage('actionMessage', err.message);
+          showGlobalFeedback('error', err.message);
+          return;
+        }
         setBusy(true);
         setMessage('actionMessage', 'Starting Action Preview...');
+        showGlobalFeedback('running', 'Starting Action Preview...');
         setLocalRunningStatus('ACTION_PREVIEW');
         startPolling();
         google.script.run
           .withSuccessHandler(function(result) {
             startRequestPending = false;
             setMessage('actionMessage', result && result.message ? result.message : 'Action Preview started.');
+            showGlobalFeedback('running', result && result.message ? result.message : 'Action Preview started.');
             refreshStatus();
           })
           .withFailureHandler(function(err) {
             startRequestPending = false;
             setBusy(false);
             setMessage('actionMessage', err && err.message ? err.message : 'Failed to start Action Preview.');
+            showGlobalFeedback('error', err && err.message ? err.message : 'Failed to start Action Preview.');
           })
           .START_ACTION_FROM_SIDEBAR(config);
       }
@@ -1448,20 +1931,30 @@
         try { config = buildPipelineConfig(); }
         catch (err) { setMessage('homeMessage', err.message); return; }
         setBusy(true);
-        setMessage('homeMessage', 'Starting Verify → Resolve → Action Preview...');
-        setLocalRunningStatus('PIPELINE:VERIFY');
+        showGlobalFeedback('running', 'Starting selected Multi-Phase phases...');
+        setLocalRunningStatus('MULTI_PHASE');
         startPolling();
         google.script.run
           .withSuccessHandler(function(result) {
             startRequestPending = false;
-            setMessage('homeMessage', result && result.message ? result.message : 'Multi-Phase Preview started.');
+            showGlobalFeedback(
+              'running',
+              result && result.message
+                ? result.message
+                : 'Multi-Phase started.'
+            );
             refreshStatus();
             startPolling();
           })
           .withFailureHandler(function(err) {
             startRequestPending = false;
             setBusy(false);
-            setMessage('homeMessage', err && err.message ? err.message : 'Failed to start Multi-Phase Preview.');
+            showGlobalFeedback(
+              'error',
+              err && err.message
+                ? err.message
+                : 'Failed to start Multi-Phase.'
+            );
           })
           .START_MULTI_PHASE_FROM_SIDEBAR(config);
       }
@@ -1478,15 +1971,35 @@
             renderStatus(status);
 
             if (status.running) {
+              showGlobalFeedback(
+                'running',
+                (status.status || 'Running') +
+                (status.mode ? '\nMode: ' + status.mode : '') +
+                (status.currentRow || status.endRow
+                  ? '\nRows: ' + (status.currentRow || '-') + ' / ' + (status.endRow || '-')
+                  : '')
+              );
               startPolling();
             } else if (!startRequestPending) {
               stopPolling();
+              hideGlobalFeedback();
             }
           })
           .withFailureHandler(function(err) {
-            setMessage('homeMessage', err && err.message ? err.message : 'Failed to refresh status.');
-            // Do not unlock controls on a status-read failure while a run may
-            // still be active. Stop & Reset remains available.
+            showGlobalFeedback(
+              'error',
+              err && err.message
+                ? err.message
+                : 'Failed to refresh status.'
+            );
+            setText('homeStatus', 'Status unavailable');
+            setText('homeMode', '-');
+            setMessage(
+              'homeMessage',
+              err && err.message ? err.message : 'Failed to refresh status.'
+            );
+            // Keep controls locked when status cannot be verified.
+            setBusy(true);
           })
           .GET_VERRACT_ENGINE_STATUS();
       }
@@ -1532,21 +2045,350 @@
           .RUN_DIAGNOSTICS_FROM_SIDEBAR();
       }
 
+
+
+      function getMappingColumn_(groupName, key) {
+        var input = document.querySelector(
+          '[data-map-column="' + groupName + '"][data-map-key="' + key + '"]'
+        );
+        return input ? normalizeColumnText(input.value) : '';
+      }
+
+      function syncExecutionFromPipeline_() {
+        syncActionSourceColumns_();
+
+        byId('executionPlanStatusColumn').value =
+          getMappingColumn_('workflowPipeline', 'PipelineStatus');
+
+        byId('executionOperationColumn').value =
+          getMappingColumn_('action', 'Operation');
+
+        byId('executionSourceObjectMode').value =
+          valueOf('actionSourceObjectMode').toUpperCase();
+
+        byId('executionSourcePathIdColumn').value =
+          getMappingColumn_('workflowShared', 'SharedPathID');
+
+        byId('executionSourceFileIdColumn').value =
+          getMappingColumn_('workflowShared', 'SharedFileID');
+
+        byId('executionTargetColumn').value =
+          columnValueOf('actionTargetColumn');
+
+        byId('executionRootIdColumn').value =
+          columnValueOf('actionRootIdColumn');
+      }
+
+      function buildExecutionConfig(confirmation) {
+        syncExecutionFromPipeline_();
+
+        var sourceMode =
+          valueOf('executionSourceObjectMode').toUpperCase();
+        var verifyMapping = getMapping('verify');
+        var sharedMapping = getMapping('workflowShared');
+        var executionOutputMapping = {
+          ExecutionStatus:
+            columnValueOf('executionStatusOutput'),
+          ExecutionRunID:
+            columnValueOf('executionRunIdOutput'),
+          ExecutedAt:
+            columnValueOf('executionExecutedAtOutput'),
+          ExecutionNote:
+            columnValueOf('executionNoteOutput')
+        };
+
+        requireFrontendMappingFields_(
+          verifyMapping,
+          sourceMode === 'FOLDER'
+            ? ['Exists', 'Type', 'MatchedPathColumn', 'PathID']
+            : ['Exists', 'Type', 'MatchedPathColumn', 'FileID', 'PathID'],
+          'Post-execution Verify'
+        );
+
+        requireFrontendMappingFields_(
+          sharedMapping,
+          sourceMode === 'FOLDER'
+            ? ['SharedPathID']
+            : ['SharedFileID', 'SharedPathID'],
+          'Object Result'
+        );
+
+        requireFrontendMappingFields_(
+          executionOutputMapping,
+          ['ExecutionStatus', 'ExecutionNote'],
+          'Execution Output'
+        );
+
+        return attachSelection({
+          planStatusColumn: columnValueOf('executionPlanStatusColumn'),
+          operationColumn: columnValueOf('executionOperationColumn'),
+          sourceObjectMode: sourceMode,
+          sourcePathIdColumn: columnValueOf('executionSourcePathIdColumn'),
+          sourceFileIdColumn: columnValueOf('executionSourceFileIdColumn'),
+          targetColumn: columnValueOf('executionTargetColumn'),
+          rootIdColumn: columnValueOf('executionRootIdColumn'),
+          batchSize: valueOf('executionBatchSize'),
+          cleanupMode: valueOf('executionCleanupMode'),
+          confirmation: String(confirmation || ''),
+          verifyOutputMapping: verifyMapping,
+          sharedOutputMapping: sharedMapping,
+          outputMapping: executionOutputMapping
+        });
+      }
+
+      function validateExecution() {
+        var config;
+
+        try {
+          config = buildExecutionConfig('EXECUTE');
+        } catch (err) {
+          setMessage('executionMessage', err.message);
+          showGlobalFeedback('error', err.message);
+          return;
+        }
+
+        setMessage('executionMessage', 'Validating...');
+        showGlobalFeedback('running', 'Validating Real Execution...');
+
+        google.script.run
+          .withSuccessHandler(function(result) {
+            var validationMessage =
+              result && result.message
+                ? result.message
+                : 'Validated.';
+            setMessage(
+              'executionMessage',
+              validationMessage
+            );
+            showGlobalFeedback(
+              result && result.success
+                ? 'success'
+                : 'error',
+              validationMessage
+            );
+          })
+          .withFailureHandler(function(err) {
+            var validationError =
+              err && err.message
+                ? err.message
+                : 'Validation failed.';
+            setMessage(
+              'executionMessage',
+              validationError
+            );
+            showGlobalFeedback(
+              'error',
+              validationError
+            );
+          })
+          .VALIDATE_EXECUTION_FROM_SIDEBAR(config);
+      }
+
+      function setExecutionConfirmationError_(message) {
+        var errorElement =
+          byId('executionConfirmationError');
+
+        errorElement.textContent =
+          message || '';
+
+        errorElement.classList.toggle(
+          'hidden',
+          !message
+        );
+      }
+
+      function setExecutionConfirmationPending_(isPending) {
+        byId(
+          'executionConfirmationInput'
+        ).disabled = isPending;
+
+        byId(
+          'executionConfirmationCancelButton'
+        ).disabled = isPending;
+
+        byId(
+          'executionConfirmationConfirmButton'
+        ).disabled = isPending;
+      }
+
+      function openExecutionConfirmationModal_() {
+        var modal =
+          byId('executionConfirmationModal');
+
+        var input =
+          byId('executionConfirmationInput');
+
+        input.value = '';
+        setExecutionConfirmationError_('');
+        setExecutionConfirmationPending_(false);
+        modal.classList.remove('hidden');
+        modal.setAttribute(
+          'aria-hidden',
+          'false'
+        );
+
+        setTimeout(function() {
+          input.focus();
+        }, 0);
+      }
+
+      function closeExecutionConfirmationModal_() {
+        var modal =
+          byId('executionConfirmationModal');
+
+        byId(
+          'executionConfirmationInput'
+        ).value = '';
+
+        setExecutionConfirmationError_('');
+        setExecutionConfirmationPending_(false);
+        modal.classList.add('hidden');
+        modal.setAttribute(
+          'aria-hidden',
+          'true'
+        );
+      }
+
+      function submitExecutionConfirmation_() {
+        var confirmButton =
+          byId(
+            'executionConfirmationConfirmButton'
+          );
+
+        if (confirmButton.disabled) {
+          return;
+        }
+
+        var keyword = byId(
+          'executionConfirmationInput'
+        ).value.trim();
+
+        if (keyword !== 'EXECUTE') {
+          setExecutionConfirmationError_(
+            'Type EXECUTE exactly.'
+          );
+          return;
+        }
+
+        setExecutionConfirmationError_('');
+        setExecutionConfirmationPending_(true);
+        runExecution('EXECUTE');
+      }
+
+      function runExecution(confirmation) {
+        var config;
+
+        try {
+          config = buildExecutionConfig(
+            confirmation
+          );
+        } catch (err) {
+          setMessage('executionMessage', err.message);
+          showGlobalFeedback('error', err.message);
+          setExecutionConfirmationError_(
+            err.message
+          );
+          setExecutionConfirmationPending_(false);
+          return;
+        }
+
+        startRequestPending = true;
+        setBusy(true);
+        setMessage('executionMessage', 'Starting real execution...');
+        showGlobalFeedback('running', 'Starting real execution...');
+
+        google.script.run
+          .withSuccessHandler(function(result) {
+            startRequestPending = false;
+            var executionMessage =
+              result && result.message
+                ? result.message
+                : 'Execution started.';
+            setMessage(
+              'executionMessage',
+              executionMessage
+            );
+            showGlobalFeedback(
+              'running',
+              executionMessage
+            );
+            closeExecutionConfirmationModal_();
+            refreshStatus();
+            startPolling();
+          })
+          .withFailureHandler(function(err) {
+            startRequestPending = false;
+            setBusy(false);
+            var executionError =
+              err && err.message
+                ? err.message
+                : 'Execution failed to start.';
+            setMessage(
+              'executionMessage',
+              executionError
+            );
+            showGlobalFeedback(
+              'error',
+              executionError
+            );
+            setExecutionConfirmationError_(
+              executionError
+            );
+            setExecutionConfirmationPending_(false);
+          })
+          .START_EXECUTION_FROM_SIDEBAR(config);
+      }
+
       function bindEvents() {
+        byId('globalHomeButton').addEventListener('click', function() {
+          showView('homeView');
+        });
+
+        byId('globalMenuButton').addEventListener('click', function() {
+          byId('globalMenu').classList.toggle('hidden');
+        });
+
+        var globalItems = document.querySelectorAll('[data-global-view]');
+        for (var globalIndex = 0; globalIndex < globalItems.length; globalIndex++) {
+          globalItems[globalIndex].addEventListener('click', function() {
+            showView(this.getAttribute('data-global-view'));
+          });
+        }
+
+        byId('pipelineRunVerify').addEventListener('change', enforcePipelineDependencies_);
+        byId('pipelineRunResolve').addEventListener('change', enforcePipelineDependencies_);
+        byId('pipelineRunAction').addEventListener('change', enforcePipelineDependencies_);
+
         byId('setSelectionButton').addEventListener('click', setSelection);
         byId('clearSelectionButton').addEventListener('click', clearSelection);
-        byId('openVerifyButton').addEventListener('click', function() { showView('verifyView'); });
-        byId('openResolveButton').addEventListener('click', function() { showView('resolveView'); });
-        byId('openActionButton').addEventListener('click', function() { showView('actionView'); });
-        byId('openPipelineButton').addEventListener('click', function() { showView('pipelineView'); });
-        byId('backFromVerifyButton').addEventListener('click', function() { showView('homeView'); });
-        byId('backFromResolveButton').addEventListener('click', function() { showView('homeView'); });
-        byId('backFromActionButton').addEventListener('click', function() { showView('homeView'); });
-        byId('backFromPipelineButton').addEventListener('click', function() { showView('homeView'); });
-        byId('goVerifyFromPipelineButton').addEventListener('click', function() { showView('verifyView'); });
-        byId('goVerifyFromActionButton').addEventListener('click', function() { showView('verifyView'); });
-        byId('goResolveFromVerifyButton').addEventListener('click', function() { showView('resolveView'); });
-        byId('goVerifyFromResolveButton').addEventListener('click', function() { showView('verifyView'); });
+        bindEventIfPresent_('validateExecutionButton', 'click', validateExecution);
+        byId('runExecutionButton').addEventListener('click', openExecutionConfirmationModal_);
+        byId('executionConfirmationCancelButton').addEventListener('click', closeExecutionConfirmationModal_);
+        byId('executionConfirmationConfirmButton').addEventListener('click', submitExecutionConfirmation_);
+        byId('executionConfirmationInput').addEventListener('input', function() {
+          setExecutionConfirmationError_('');
+        });
+        byId('executionConfirmationInput').addEventListener('keydown', function(event) {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          submitExecutionConfirmation_();
+        });
+        bindEventIfPresent_('actionSourceObjectMode', 'change', function() {
+          markMandatoryMappingRows_();
+          syncActionSourceColumns_();
+          syncExecutionFromPipeline_();
+          scheduleUiSettingsSave_();
+        });
+        bindEventIfPresent_('actionOperationMode', 'change', function() {
+          updateActionOperationUi_();
+          scheduleUiSettingsSave_();
+        });
+        bindEventIfPresent_('actionOperationValue', 'change', scheduleUiSettingsSave_);
+        bindEventIfPresent_(
+          'executionCleanupMode',
+          'change',
+          scheduleUiSettingsSave_
+        );
         byId('refreshStatusButton').addEventListener('click', refreshStatus);
         byId('diagnosticsButton').addEventListener('click', runDiagnostics);
         byId('stopButton').addEventListener('click', stopVerract);
@@ -1557,8 +2399,14 @@
         byId('previewRemapButton').addEventListener('click', previewColumnRemap);
         byId('applyRemapButton').addEventListener('click', applyColumnRemap);
         byId('undoRemapButton').addEventListener('click', undoLastRemap);
-        byId('remapFromColumn').addEventListener('input', function() { pendingRemap = null; byId('applyRemapButton').disabled = true; });
-        byId('remapToColumn').addEventListener('input', function() { pendingRemap = null; byId('applyRemapButton').disabled = true; });
+        bindEventIfPresent_('remapFromColumn', 'input', function() {
+          pendingRemap = null;
+          byId('applyRemapButton').disabled = true;
+        });
+        bindEventIfPresent_('remapToColumn', 'input', function() {
+          pendingRemap = null;
+          byId('applyRemapButton').disabled = true;
+        });
 
         var toolButtons = document.querySelectorAll('[data-action]');
         for (var i = 0; i < toolButtons.length; i++) {
@@ -1574,12 +2422,15 @@
       document.addEventListener('DOMContentLoaded', function() {
         setupMappingUi();
         bindEvents();
+        enforcePipelineDependencies_();
         bindUiSettingsAutoSave_();
         loadMappings();
         loadSavedSelection();
         renderSelectionEverywhere();
-        refreshStatus();
+        // loadUiSettings() performs the first authoritative status refresh.
       });
     </script>
+
+    <div id="globalFeedback" class="global-feedback hidden"></div>
   </body>
 </html>

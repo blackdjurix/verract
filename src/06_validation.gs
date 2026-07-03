@@ -640,6 +640,36 @@ function validateOutputMapping_(
   };
 }
 
+function requireOutputMappingFields_(
+  mapping,
+  requiredFields,
+  label
+) {
+  mapping = mapping || {};
+  var missing = [];
+
+  for (
+    var i = 0;
+    i < requiredFields.length;
+    i++
+  ) {
+    if (!mapping[requiredFields[i]]) {
+      missing.push(requiredFields[i]);
+    }
+  }
+
+  if (missing.length) {
+    throw new Error(
+      label +
+      ' mapping is required for: ' +
+      missing.join(', ') +
+      '.'
+    );
+  }
+
+  return true;
+}
+
 function serializeOutputMapping_(
   mapping
 ) {
@@ -858,11 +888,11 @@ function convertVerifyResultToObject_(
     SharedFileID: fileId,
     SharedPath: fileId
       ? splitPath.path
-      : '',
+      : verifiedPath,
     SharedFilename: fileId
       ? splitPath.filename
       : '',
-    SharedSource: fileId
+    SharedSource: fileId || pathId
       ? 'VERIFY'
       : ''
   };
@@ -909,7 +939,7 @@ function buildVerifyOutputObject_(
       ? splitPath.filename
       : '',
     SharedSource:
-      isValid && fileId
+      isValid && (fileId || pathId)
         ? 'VERIFY'
         : ''
   };
@@ -942,17 +972,23 @@ function convertResolveRowToObject_(
     Confidence: row[6] || '',
     ResolveNote: row[7] || '',
     SharedPathID: canShare
-      ? row[8] || ''
+      ? String(resolvedType).toLowerCase() === 'folder'
+        ? resolvedId
+        : row[8] || ''
       : '',
-    SharedFileID: canShare
-      ? resolvedId
-      : '',
+    SharedFileID: canShare &&
+      String(resolvedType).toLowerCase() === 'file'
+        ? resolvedId
+        : '',
     SharedPath: canShare
-      ? splitPath.path
+      ? String(resolvedType).toLowerCase() === 'folder'
+        ? resolvedPath
+        : splitPath.path
       : '',
-    SharedFilename: canShare
-      ? splitPath.filename
-      : '',
+    SharedFilename: canShare &&
+      String(resolvedType).toLowerCase() === 'file'
+        ? splitPath.filename
+        : '',
     SharedSource: canShare
       ? 'RESOLVE'
       : ''
@@ -1005,28 +1041,129 @@ function getMappedValue_(
 function normalizeActionConfig_(config) {
   if (!config) throw new Error('Action config is required.');
 
+  var operationMode = String(
+    config.operationMode || 'SINGLE'
+  ).trim().toUpperCase();
+
+  var sourceObjectMode = String(
+    config.sourceObjectMode || 'FILE'
+  ).trim().toUpperCase();
+
   var normalized = {
     spreadsheetId: String(config.spreadsheetId || ''),
     sheetName: String(config.sheetName || ''),
     startRow: parseInt(config.startRow, 10),
     endRow: parseInt(config.endRow, 10),
-    sourceObjectIdColumn: normalizeRequiredColumn_(config.sourceObjectIdColumn),
-    operationColumn: normalizeRequiredColumn_(config.operationColumn),
+
+    sourceObjectIdColumn: normalizeOptionalColumn_(config.sourceObjectIdColumn),
+    sourcePathIdColumn: normalizeOptionalColumn_(config.sourcePathIdColumn),
+    sourceFileIdColumn: normalizeOptionalColumn_(config.sourceFileIdColumn),
+    sourceObjectMode: sourceObjectMode,
+
+    operationMode: operationMode,
+    operationValue: normalizeActionOperation_(config.operationValue),
+    operationColumn: normalizeOptionalColumn_(config.operationColumn),
+
     targetColumn: normalizeRequiredColumn_(config.targetColumn),
     rootIdColumn: normalizeRequiredColumn_(config.rootIdColumn),
     batchSize: parseInt(config.batchSize || ACTION_DEFAULT_BATCH_SIZE, 10),
     triggerGapMinutes: parseInt(config.triggerGapMinutes || ACTION_DEFAULT_TRIGGER_GAP_MINUTES, 10),
-    outputMapping: normalizeOutputMapping_(config.actionOutputMapping || config.outputMapping || {}, ACTION_OUTPUT_FIELDS)
+    outputMapping: normalizeOutputMapping_(
+      mergeOutputMappings_(
+        config.actionOutputMapping || config.outputMapping || {},
+        config.workflowOutputMapping || {}
+      ),
+      config.pipelineMode === true
+        ? ACTION_RUNTIME_OUTPUT_FIELDS
+        : ACTION_OUTPUT_FIELDS
+    ),
+
+    pipelineMode: config.pipelineMode === true,
+    verifyExistsColumn: normalizeOptionalColumn_(config.verifyExistsColumn),
+    verifyFileIdColumn: normalizeOptionalColumn_(config.verifyFileIdColumn),
+    verifyPathIdColumn: normalizeOptionalColumn_(config.verifyPathIdColumn),
+    resolvedIdColumn: normalizeOptionalColumn_(config.resolvedIdColumn),
+    resolveStatusColumn: normalizeOptionalColumn_(config.resolveStatusColumn),
+    resolveMatchCountColumn: normalizeOptionalColumn_(config.resolveMatchCountColumn)
   };
 
-  if (!normalized.spreadsheetId || !normalized.sheetName) throw new Error('Action spreadsheet/sheet context is required.');
-  if (isNaN(normalized.startRow) || isNaN(normalized.endRow) || normalized.startRow < 1 || normalized.endRow < normalized.startRow) {
+  if (!normalized.spreadsheetId || !normalized.sheetName) {
+    throw new Error('Action spreadsheet/sheet context is required.');
+  }
+
+  if (
+    isNaN(normalized.startRow) ||
+    isNaN(normalized.endRow) ||
+    normalized.startRow < 1 ||
+    normalized.endRow < normalized.startRow
+  ) {
     throw new Error('Action row range is invalid.');
   }
-  normalized.batchSize = Math.max(ACTION_MIN_BATCH_SIZE, Math.min(ACTION_MAX_BATCH_SIZE, normalized.batchSize));
-  normalized.triggerGapMinutes = Math.max(ACTION_MIN_TRIGGER_GAP_MINUTES, Math.min(ACTION_MAX_TRIGGER_GAP_MINUTES, normalized.triggerGapMinutes));
 
-  validateOutputMapping_(normalized.outputMapping, ACTION_OUTPUT_FIELDS, 'Action');
+  if (['FILE', 'FOLDER'].indexOf(normalized.sourceObjectMode) === -1) {
+    throw new Error('Source Object Mode must be FILE or FOLDER.');
+  }
+
+  if (
+    normalized.sourceObjectMode === 'FILE' &&
+    (
+      !normalized.sourceFileIdColumn ||
+      !normalized.sourcePathIdColumn
+    )
+  ) {
+    throw new Error(
+      'Object Result FileID and PathID mappings are required for FILE mode.'
+    );
+  }
+
+  if (normalized.sourceObjectMode === 'FOLDER' && !normalized.sourcePathIdColumn) {
+    throw new Error('Object Result PathID mapping is required for FOLDER mode.');
+  }
+
+  if (['SINGLE', 'COLUMN'].indexOf(normalized.operationMode) === -1) {
+    throw new Error('Operation Source must be SINGLE or COLUMN.');
+  }
+
+  if (normalized.operationMode === 'SINGLE' && !normalized.operationValue) {
+    throw new Error('Select a valid single operation.');
+  }
+
+  if (normalized.operationMode === 'COLUMN' && !normalized.operationColumn) {
+    throw new Error('Operation Column is required in COLUMN mode.');
+  }
+
+  normalized.batchSize = Math.max(
+    ACTION_MIN_BATCH_SIZE,
+    Math.min(ACTION_MAX_BATCH_SIZE, normalized.batchSize)
+  );
+
+  normalized.triggerGapMinutes = Math.max(
+    ACTION_MIN_TRIGGER_GAP_MINUTES,
+    Math.min(ACTION_MAX_TRIGGER_GAP_MINUTES, normalized.triggerGapMinutes)
+  );
+
+  validateOutputMapping_(
+    normalized.outputMapping,
+    normalized.pipelineMode
+      ? ACTION_RUNTIME_OUTPUT_FIELDS
+      : ACTION_OUTPUT_FIELDS,
+    'Action'
+  );
+
+  requireOutputMappingFields_(
+    normalized.outputMapping,
+    ACTION_REQUIRED_OUTPUT_FIELDS,
+    'Action Output'
+  );
+
+  if (normalized.pipelineMode) {
+    requireOutputMappingFields_(
+      normalized.outputMapping,
+      PIPELINE_REQUIRED_OUTPUT_FIELDS,
+      'Workflow Result'
+    );
+  }
+
   return normalized;
 }
 

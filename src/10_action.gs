@@ -8,6 +8,12 @@ function startActionPreviewAutomation_(config) {
   var props = PropertiesService.getScriptProperties();
   checkEngineHeartbeat_();
 
+  if (props.getProperty('EXECUTION_ACTIVE') === 'TRUE') {
+    throw new Error(
+      'Real Execution masih aktif. Jalankan Stop & Reset dulu.'
+    );
+  }
+
   if (props.getProperty(ENGINE_STATE_KEY) === 'TRUE') {
     throw new Error('Automation masih aktif. Jalankan Stop & Reset dulu.');
   }
@@ -20,8 +26,13 @@ function startActionPreviewAutomation_(config) {
   props.setProperties({
     ACTION_CURRENT_ROW: normalized.startRow.toString(),
     ACTION_END_ROW: normalized.endRow.toString(),
-    ACTION_SOURCE_OBJECT_ID_COLUMN: normalized.sourceObjectIdColumn.toString(),
-    ACTION_OPERATION_COLUMN: normalized.operationColumn.toString(),
+    ACTION_SOURCE_OBJECT_ID_COLUMN: String(normalized.sourceObjectIdColumn || ''),
+    ACTION_SOURCE_PATH_ID_COLUMN: String(normalized.sourcePathIdColumn || ''),
+    ACTION_SOURCE_FILE_ID_COLUMN: String(normalized.sourceFileIdColumn || ''),
+    ACTION_SOURCE_OBJECT_MODE: normalized.sourceObjectMode,
+    ACTION_OPERATION_MODE: normalized.operationMode,
+    ACTION_OPERATION_VALUE: normalized.operationValue || '',
+    ACTION_OPERATION_COLUMN: String(normalized.operationColumn || ''),
     ACTION_TARGET_COLUMN: normalized.targetColumn.toString(),
     ACTION_ROOT_ID_COLUMN: normalized.rootIdColumn.toString(),
     ACTION_OUTPUT_MAPPING: serializeOutputMapping_(normalized.outputMapping),
@@ -30,7 +41,15 @@ function startActionPreviewAutomation_(config) {
     ACTION_BATCH_SIZE: normalized.batchSize.toString(),
     ACTION_TRIGGER_GAP_MINUTES: normalized.triggerGapMinutes.toString(),
     ACTION_ENGINE_STARTED_AT: now,
-    ACTION_LAST_SUCCESS_TS: now
+    ACTION_LAST_SUCCESS_TS: now,
+    ACTION_PIPELINE_MODE: normalized.pipelineMode ? 'TRUE' : 'FALSE',
+    ACTION_SOURCE_OBJECT_MODE: normalized.sourceObjectMode,
+    ACTION_VERIFY_EXISTS_COLUMN: String(normalized.verifyExistsColumn || ''),
+    ACTION_VERIFY_FILE_ID_COLUMN: String(normalized.verifyFileIdColumn || ''),
+    ACTION_VERIFY_PATH_ID_COLUMN: String(normalized.verifyPathIdColumn || ''),
+    ACTION_RESOLVED_ID_COLUMN: String(normalized.resolvedIdColumn || ''),
+    ACTION_RESOLVE_STATUS_COLUMN: String(normalized.resolveStatusColumn || ''),
+    ACTION_RESOLVE_MATCH_COUNT_COLUMN: String(normalized.resolveMatchCountColumn || '')
   });
   props.setProperty(ENGINE_STATE_KEY, 'TRUE');
 
@@ -84,7 +103,15 @@ function TRIGGER_ACTION_PREVIEW_BATCH_MULTI() {
       outputRows.push(buildActionPreviewResultForRow_(rows[i], config, seen, currentRow + i));
     }
 
-    writeMappedOutputRows_(sheet, currentRow, outputRows, config.outputMapping, ACTION_OUTPUT_FIELDS);
+    writeMappedOutputRows_(
+      sheet,
+      currentRow,
+      outputRows,
+      config.outputMapping,
+      config.pipelineMode
+        ? ACTION_RUNTIME_OUTPUT_FIELDS
+        : ACTION_OUTPUT_FIELDS
+    );
     var nextRow = currentRow + count;
     props.setProperty('ACTION_CURRENT_ROW', nextRow.toString());
     props.setProperty('ACTION_LAST_SUCCESS_TS', Date.now().toString());
@@ -109,17 +136,35 @@ function finishActionPreviewPhase_() {
 
 function loadActionRuntimeConfig_(props) {
   return {
-    sourceObjectIdColumn: parseInt(props.getProperty('ACTION_SOURCE_OBJECT_ID_COLUMN'), 10),
-    operationColumn: parseInt(props.getProperty('ACTION_OPERATION_COLUMN'), 10),
+    sourceObjectIdColumn: parseInt(props.getProperty('ACTION_SOURCE_OBJECT_ID_COLUMN'), 10) || 0,
+    sourcePathIdColumn: parseInt(props.getProperty('ACTION_SOURCE_PATH_ID_COLUMN'), 10) || 0,
+    sourceFileIdColumn: parseInt(props.getProperty('ACTION_SOURCE_FILE_ID_COLUMN'), 10) || 0,
+    sourceObjectMode: props.getProperty('ACTION_SOURCE_OBJECT_MODE') || 'FILE',
+    operationMode: props.getProperty('ACTION_OPERATION_MODE') || 'SINGLE',
+    operationValue: props.getProperty('ACTION_OPERATION_VALUE') || '',
+    operationColumn: parseInt(props.getProperty('ACTION_OPERATION_COLUMN'), 10) || 0,
     targetColumn: parseInt(props.getProperty('ACTION_TARGET_COLUMN'), 10),
     rootIdColumn: parseInt(props.getProperty('ACTION_ROOT_ID_COLUMN'), 10),
-    outputMapping: parseStoredOutputMapping_(props.getProperty('ACTION_OUTPUT_MAPPING'), ACTION_OUTPUT_FIELDS)
+    pipelineMode: props.getProperty('ACTION_PIPELINE_MODE') === 'TRUE',
+    outputMapping: parseStoredOutputMapping_(
+      props.getProperty('ACTION_OUTPUT_MAPPING'),
+      props.getProperty('ACTION_PIPELINE_MODE') === 'TRUE'
+        ? ACTION_RUNTIME_OUTPUT_FIELDS
+        : ACTION_OUTPUT_FIELDS
+    )
   };
 }
 
 function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
-  var sourceId = getActionCell_(row, config.sourceObjectIdColumn);
-  var operation = normalizeActionOperation_(getActionCell_(row, config.operationColumn));
+  var sourceColumn = config.sourceObjectMode === 'FOLDER'
+    ? config.sourcePathIdColumn
+    : config.sourceFileIdColumn;
+
+  var sourceId = String(getActionCell_(row, sourceColumn) || '').trim();
+
+  var operation = config.operationMode === 'COLUMN'
+    ? normalizeActionOperation_(getActionCell_(row, config.operationColumn))
+    : normalizeActionOperation_(config.operationValue);
   var target = String(getActionCell_(row, config.targetColumn) || '').trim();
   var rootId = String(getActionCell_(row, config.rootIdColumn) || '').trim();
 
@@ -138,7 +183,9 @@ function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
 
   for (var planIndex = 0; planIndex < sourcePlans.length; planIndex++) {
     var previousPlan = sourcePlans[planIndex];
-    var bothAreCopy = previousPlan.operation === 'COPY' && operation === 'COPY';
+    var bothAreCopy =
+      (previousPlan.operation === 'COPY' || previousPlan.operation === 'COPY_RENAME') &&
+      (operation === 'COPY' || operation === 'COPY_RENAME');
 
     // COPY is intentionally allowed to fan out from one source object
     // to multiple different targets. Other operation combinations remain
@@ -173,6 +220,33 @@ function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
     return actionResult_('INVALID_TARGET', operation, sourceId, target, '', '', '', targetPlan.error);
   }
 
+  var targetPlanKey =
+    'TARGET|' +
+    String(rootId || '').trim() +
+    '|' +
+    String(targetPlan.fullObjectPath || '').trim().toLowerCase() +
+    '|' +
+    String(source.objectType || '').trim().toLowerCase();
+
+  var existingTargetPlan = seen[targetPlanKey];
+  var isFolderMergePlan =
+    source.objectType === 'folder' &&
+    existingTargetPlan &&
+    existingTargetPlan.sourceId !== sourceId &&
+    (
+      operation === 'MOVE' ||
+      operation === 'MOVE_RENAME' ||
+      operation === 'COPY' ||
+      operation === 'COPY_RENAME'
+    );
+
+  if (!existingTargetPlan) {
+    seen[targetPlanKey] = {
+      sourceId: sourceId,
+      operation: operation
+    };
+  }
+
   if (operation === 'RENAME') {
     if (source.objectName === targetPlan.objectName) {
       return actionResult_('SKIP_ALREADY_AT_TARGET', operation, sourceId, target, source.parentId, targetPlan.objectName, '', 'The object already has the requested name.');
@@ -203,7 +277,30 @@ function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
     return actionResult_('SKIP_ALREADY_AT_TARGET', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', 'The object is already at the requested target.');
   }
   if (targetLookup.found && targetLookup.objectId !== sourceId) {
-    return actionResult_('TARGET_OBJECT_CONFLICT', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', 'Another object already exists at the target path.');
+    var canMergeExistingFolder =
+      source.objectType === 'folder' &&
+      targetLookup.objectType === 'folder' &&
+      (
+        operation === 'MOVE' ||
+        operation === 'MOVE_RENAME' ||
+        operation === 'COPY' ||
+        operation === 'COPY_RENAME'
+      );
+
+    if (!canMergeExistingFolder) {
+      return actionResult_('TARGET_OBJECT_CONFLICT', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', 'Another object already exists at the target path.');
+    }
+
+    return actionResult_(
+      'READY_MERGE_EXISTING_FOLDER',
+      operation,
+      sourceId,
+      target,
+      targetLookup.parentId,
+      targetPlan.objectName,
+      operation === 'MOVE' || operation === 'MOVE_RENAME' ? 'CHECK_AFTER_MOVE' : '',
+      'Dry-run only. Merge folder "' + source.objectName + '" into existing target folder "' + targetPlan.fullObjectPath + '". Row ' + rowNumber + '.'
+    );
   }
   if (targetLookup.error === 'AMBIGUOUS_FILE_NAME' || targetLookup.error === 'AMBIGUOUS_FOLDER_NAME') {
     return actionResult_('AMBIGUOUS_TARGET_OBJECT', operation, sourceId, target, targetLookup.parentId, targetPlan.objectName, '', targetLookup.error);
@@ -217,14 +314,18 @@ function buildActionPreviewResultForRow_(row, config, seen, rowNumber) {
     return actionResult_('SKIP_ALREADY_AT_TARGET', operation, sourceId, target, targetParentId, targetPlan.objectName, '', 'The object is already in the requested parent with the requested name.');
   }
 
-  var status = parentResult.exists ? 'READY' : 'READY_CREATE_TARGET_PARENT';
+  var status = isFolderMergePlan
+    ? 'READY_MERGE_TARGET'
+    : (parentResult.exists ? 'READY' : 'READY_CREATE_TARGET_PARENT');
   var cleanup = operation === 'MOVE' || operation === 'MOVE_RENAME' ? 'CHECK_AFTER_MOVE' : '';
   var effectiveSteps = operation;
   if ((operation === 'MOVE' || operation === 'COPY') && targetPlan.requiresRename) {
     effectiveSteps += ' + RENAME';
   }
 
-  var note = 'Dry-run only. ' + effectiveSteps + ' ' + source.objectType + ' "' + source.objectName + '"';
+  var note = isFolderMergePlan
+    ? 'Dry-run only. Merge ' + source.objectType + ' "' + source.objectName + '" into shared target "' + targetPlan.fullObjectPath + '".'
+    : 'Dry-run only. ' + effectiveSteps + ' ' + source.objectType + ' "' + source.objectName + '"';
   note += parentResult.exists
     ? ' to parent ID ' + targetParentId + '.'
     : ' after creating target parent path "' + targetPlan.parentPath + '".';
@@ -241,6 +342,19 @@ function getActionCell_(row, column) {
 }
 
 function actionResult_(status, operation, sourceId, target, targetParentId, targetObjectName, cleanup, note) {
+  var sourceType = '';
+  var sourcePath = '';
+
+  if (sourceId) {
+    try {
+      var snapshot = inspectDriveObjectById_(sourceId);
+      if (snapshot && snapshot.exists && snapshot.accessible) {
+        sourceType = snapshot.objectType || '';
+        sourcePath = snapshot.objectName || '';
+      }
+    } catch (err) {}
+  }
+
   return {
     OperationStatus: status || '',
     Operation: operation || '',
@@ -249,6 +363,23 @@ function actionResult_(status, operation, sourceId, target, targetParentId, targ
     TargetParentID: targetParentId || '',
     TargetObjectName: targetObjectName || '',
     CleanupCandidate: cleanup || '',
-    OperationNote: note || ''
+    OperationNote: note || '',
+
+    PipelineStatus: status || '',
+    FinalSource: sourceId ? 'CANONICAL' : '',
+    FinalSourceObjectID: sourceId || '',
+    FinalSourceType: sourceType,
+    FinalSourcePath: sourcePath,
+    FinalPhase: 'ACTION_PREVIEW',
+    PipelineNote: note || ''
   };
+}
+
+/**
+ * Compatibility hook retained for the pipeline transition.
+ * Object Result PathID/FileID are already the SSOT, so no materialization
+ * or spreadsheet rewrite is needed here.
+ */
+function materializePipelineCanonicalSourceIds_(config) {
+  return normalizeActionConfig_(config);
 }

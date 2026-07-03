@@ -414,6 +414,12 @@ function startVerifyAutomation_(config) {
 
   checkEngineHeartbeat_();
 
+  if (props.getProperty('EXECUTION_ACTIVE') === 'TRUE') {
+    throw new Error(
+      'Real Execution masih aktif. Jalankan Stop & Reset dulu.'
+    );
+  }
+
   if (
     props.getProperty(ENGINE_STATE_KEY) ===
     'TRUE'
@@ -1054,71 +1060,269 @@ function CREATE_MULTI_PHASE_PIPELINE() {
 
 function startMultiPhasePipeline_(config) {
   if (!config || !config.verify || !config.resolve || !config.action) {
-    throw new Error('Verify, Resolve, and Action configs are required.');
+    throw new Error(
+      'Verify, Resolve, and Action configs are required.'
+    );
   }
-  var props = PropertiesService.getScriptProperties();
-  if (props.getProperty(ENGINE_STATE_KEY) === 'TRUE') throw new Error('Automation masih aktif.');
+
+  var phases = config.phases || {};
+  var runVerify = phases.verify !== false;
+  var runResolve = phases.resolve === true;
+  var runAction = phases.action === true;
+
+  // Resolve and Action depend on Verify results in the current workflow.
+  if (runResolve || runAction) {
+    runVerify = true;
+  }
+
+  if (!runVerify && !runResolve && !runAction) {
+    throw new Error(
+      'Select at least one Multi-Phase phase.'
+    );
+  }
+
+  var props =
+    PropertiesService.getScriptProperties();
+
+  if (
+    props.getProperty('EXECUTION_ACTIVE') ===
+    'TRUE'
+  ) {
+    throw new Error(
+      'Real Execution masih aktif. Jalankan Stop & Reset dulu.'
+    );
+  }
+
+  if (
+    props.getProperty(ENGINE_STATE_KEY) ===
+    'TRUE'
+  ) {
+    throw new Error(
+      'Automation masih aktif.'
+    );
+  }
+
+  var firstPhase = runVerify
+    ? 'VERIFY'
+    : runResolve
+      ? 'RESOLVE'
+      : 'ACTION_PREVIEW';
 
   props.setProperties({
     PIPELINE_ENABLED: 'TRUE',
-    PIPELINE_PHASE: 'VERIFY',
+    PIPELINE_PHASE: firstPhase,
+    PIPELINE_RUN_VERIFY: runVerify ? 'TRUE' : 'FALSE',
+    PIPELINE_RUN_RESOLVE: runResolve ? 'TRUE' : 'FALSE',
+    PIPELINE_RUN_ACTION: runAction ? 'TRUE' : 'FALSE',
     PIPELINE_VERIFY_CONFIG: JSON.stringify(config.verify),
     PIPELINE_RESOLVE_CONFIG: JSON.stringify(config.resolve),
     PIPELINE_ACTION_CONFIG: JSON.stringify(config.action),
     PIPELINE_STARTED_AT: Date.now().toString()
   });
-  return startVerifyAutomation_(config.verify);
+
+  if (firstPhase === 'VERIFY') {
+    return startVerifyAutomation_(config.verify);
+  }
+
+  if (firstPhase === 'RESOLVE') {
+    return startResolveAutomation_(config.resolve);
+  }
+
+  materializePipelineCanonicalSourceIds_(
+    config.action
+  );
+
+  return startActionPreviewAutomation_(
+    config.action
+  );
 }
 
 function advanceMultiPhasePipeline_(completedPhase) {
-  var props = PropertiesService.getScriptProperties();
-  if (props.getProperty('PIPELINE_ENABLED') !== 'TRUE') return false;
+  var props =
+    PropertiesService.getScriptProperties();
 
-  var nextPhase = completedPhase === 'VERIFY'
-    ? 'RESOLVE'
-    : completedPhase === 'RESOLVE'
-      ? 'ACTION_PREVIEW'
-      : 'COMPLETE';
+  if (
+    props.getProperty('PIPELINE_ENABLED') !==
+    'TRUE'
+  ) {
+    return false;
+  }
 
-  props.setProperty('PIPELINE_PHASE', nextPhase);
+  var runResolve =
+    props.getProperty('PIPELINE_RUN_RESOLVE') ===
+    'TRUE';
+
+  var runAction =
+    props.getProperty('PIPELINE_RUN_ACTION') ===
+    'TRUE';
+
+  var nextPhase = 'COMPLETE';
+
+  if (
+    completedPhase === 'VERIFY' &&
+    runResolve
+  ) {
+    nextPhase = 'RESOLVE';
+  } else if (
+    completedPhase === 'VERIFY' &&
+    runAction
+  ) {
+    nextPhase = 'ACTION_PREVIEW';
+  } else if (
+    completedPhase === 'RESOLVE' &&
+    runAction
+  ) {
+    nextPhase = 'ACTION_PREVIEW';
+  }
+
+  props.setProperty(
+    'PIPELINE_PHASE',
+    nextPhase
+  );
+
   deleteExistingTriggers_();
-  props.setProperty(ENGINE_STATE_KEY, 'FALSE');
-  clearPhaseStateOnly_(completedPhase, props);
 
-  if (nextPhase === 'COMPLETE') {
+  props.setProperty(
+    ENGINE_STATE_KEY,
+    'FALSE'
+  );
+
+  clearPhaseStateOnly_(
+    completedPhase,
+    props
+  );
+
+  if (
+    nextPhase === 'COMPLETE'
+  ) {
     CLEAR_TRIGGER_AND_STATE();
     return true;
   }
 
-  ScriptApp.newTrigger('TRIGGER_MULTI_PHASE_TRANSITION')
+  ScriptApp
+    .newTrigger(
+      'TRIGGER_MULTI_PHASE_TRANSITION'
+    )
     .timeBased()
     .after(1000)
     .create();
+
   return true;
 }
 
 function TRIGGER_MULTI_PHASE_TRANSITION() {
   var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return;
+  if (!lock.tryLock(5000)) {
+    return;
+  }
+
+  var phase = '';
+  var phaseConfig = null;
+
   try {
     var props = PropertiesService.getScriptProperties();
-    var phase = props.getProperty('PIPELINE_PHASE');
-    deleteExistingTriggers_();
+
+    if (
+      props.getProperty('PIPELINE_ENABLED') !== 'TRUE'
+    ) {
+      return;
+    }
+
+    phase =
+      props.getProperty('PIPELINE_PHASE') || '';
 
     if (phase === 'RESOLVE') {
-      var resolveConfig = JSON.parse(props.getProperty('PIPELINE_RESOLVE_CONFIG') || '{}');
-      startResolveAutomation_(resolveConfig);
-      return;
+      phaseConfig = JSON.parse(
+        props.getProperty(
+          'PIPELINE_RESOLVE_CONFIG'
+        ) || '{}'
+      );
+    } else if (
+      phase === 'ACTION_PREVIEW'
+    ) {
+      phaseConfig = JSON.parse(
+        props.getProperty(
+          'PIPELINE_ACTION_CONFIG'
+        ) || '{}'
+      );
+      phaseConfig.pipelineMode = true;
     }
-    if (phase === 'ACTION_PREVIEW') {
-      var actionConfig = JSON.parse(props.getProperty('PIPELINE_ACTION_CONFIG') || '{}');
-      startActionPreviewAutomation_(actionConfig);
-      return;
-    }
-    CLEAR_TRIGGER_AND_STATE();
+
+    // Remove only the completed transition trigger while the state snapshot
+    // is protected. The next phase must start after this lock is released,
+    // because each phase immediately runs its first batch and acquires the
+    // same script lock.
+    deleteExistingTriggers_();
+  } catch (err) {
+    handleMultiPhaseTransitionError_(
+      err,
+      phase
+    );
+    return;
   } finally {
     lock.releaseLock();
   }
+
+  try {
+    if (phase === 'RESOLVE') {
+      startResolveAutomation_(phaseConfig);
+      return;
+    }
+
+    if (phase === 'ACTION_PREVIEW') {
+      materializePipelineCanonicalSourceIds_(
+        phaseConfig
+      );
+
+      startActionPreviewAutomation_(
+        phaseConfig
+      );
+      return;
+    }
+
+    CLEAR_TRIGGER_AND_STATE();
+  } catch (err) {
+    handleMultiPhaseTransitionError_(
+      err,
+      phase
+    );
+    throw err;
+  }
+}
+
+function handleMultiPhaseTransitionError_(
+  err,
+  phase
+) {
+  var props =
+    PropertiesService.getScriptProperties();
+
+  handleRuntimeError_(
+    new Error(
+      'Multi-Phase transition to ' +
+      (phase || 'UNKNOWN') +
+      ' failed: ' +
+      (err && err.message
+        ? err.message
+        : String(err))
+    ),
+    props
+  );
+
+  deleteExistingTriggers_();
+
+  props.setProperty(
+    ENGINE_STATE_KEY,
+    'FALSE'
+  );
+  props.setProperty(
+    'PIPELINE_PHASE',
+    'ERROR'
+  );
+  props.setProperty(
+    'PIPELINE_ENABLED',
+    'FALSE'
+  );
 }
 
 function clearPhaseStateOnly_(phase, props) {
