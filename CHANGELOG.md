@@ -1,6 +1,66 @@
 # Changelog
 
+All notable changes to `verract` are documented in this file.
+
 <details open>
+<summary><strong>v0.5.0 - Multi-Phase Dry-Run Orchestration</strong></summary>
+
+### Added
+
+- Added a resumable Multi-Phase workflow:
+  ```text
+  VERIFY → RESOLVE → ACTION PREVIEW
+  ```
+- Added verified-source priority with `ResolvedID` fallback.
+- Added dedicated Multi-Phase sidebar configuration.
+- Added pipeline-level output mapping:
+  - `PipelineStatus`
+  - `FinalSource`
+  - `FinalSourceObjectID`
+  - `FinalSourceType`
+  - `FinalSourcePath`
+  - `FinalPhase`
+  - `PipelineNote`
+- Added linked Verify, Resolve, Action, and Multi-Phase settings.
+- Added column mapping remap with preview and one-level undo.
+- Added UI button locking while the engine is active.
+- Added improved engine-state polling across phase transitions.
+- Added explicit `SOURCE_NOT_FOUND` handling for zero-match Resolve results.
+
+### Changed
+
+- Renamed the shared output label `Filename` to `ObjectName` in the sidebar.
+- Pipeline source summaries now preserve the actual origin:
+  - `VERIFY`
+  - `RESOLVE`
+- Pipeline source path now follows the final verified or resolved object.
+- `SKIP_ALREADY_AT_TARGET` now preserves final source metadata.
+- Multi-Phase navigation now opens a dedicated view instead of immediately starting a run.
+- Verify, Resolve, and Action Preview remain available as standalone modes.
+
+### Fixed
+
+- Fixed Multi-Phase Action Preview not receiving `ResolvedID` fallback.
+- Fixed pipeline summaries incorrectly reporting `FinalSource = VERIFY` after Resolve fallback.
+- Fixed zero-match Resolve results being reported as multiple candidates.
+- Fixed missing pipeline summaries for already-at-target rows.
+- Fixed undefined `engineRunning` state in column remap.
+- Fixed UI settings loader failures.
+- Fixed Home navigation accidentally starting Multi-Phase directly.
+- Fixed run buttons becoming enabled before the full pipeline completed.
+
+### Safety
+
+- All Action behavior remains dry-run only.
+- No Google Drive mutation is performed.
+
+### Known Issue
+
+- Some manually edited sidebar column settings may reset after sidebar reload or `clasp push`.
+
+</details>
+
+<details>
 <summary><strong>v0.4.0 - Object-Based Action Preview Foundation</strong></summary>
 
 ### Added
