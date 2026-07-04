@@ -1,1014 +1,249 @@
-// ======================================================
-// verract
-// Version : 0.3.4
-// Author  : blackdjurix
-//
-// Feature : Shared File Output & UI Cleanup
-//
-// Highlights:
-// - Opens verract sidebar control panel
-// - Supports persistent Set Selection workflow
-// - Starts Verify and Resolve from sidebar form config
-// - Saves Verify, Resolve, and Shared output mappings
-// - Keeps Shared PathID/FileID/Path/Filename/Source mapping global
-// - Provides sidebar-safe status, diagnostics, and reset actions
-// - Keeps Verify and Resolve engines server-side
-// ======================================================
-
-var VERRACT_SELECTION_PROPERTY =
-  'VERRACT_SELECTION_SNAPSHOT';
-
-var VERRACT_UI_SETTINGS_PROPERTY =
-  'VERRACT_UI_SETTINGS_V2';
-
-var VERRACT_UI_SETTINGS_LEGACY_PROPERTY =
-  'VERRACT_UI_SETTINGS_V1';
-
 function GET_VERRACT_UI_SETTINGS() {
-  var userProps = PropertiesService.getUserProperties();
-  var scriptProps = PropertiesService.getScriptProperties();
-  var raw = userProps.getProperty(VERRACT_UI_SETTINGS_PROPERTY);
-  var migrated = false;
-
-  if (!raw) {
-    raw = scriptProps.getProperty(VERRACT_UI_SETTINGS_LEGACY_PROPERTY);
-    migrated = !!raw;
-  }
-
-  if (!raw) {
-    return { success: true, settings: null };
-  }
-
-  try {
-    var settings = JSON.parse(raw);
-
-    if (migrated) {
-      userProps.setProperty(
-        VERRACT_UI_SETTINGS_PROPERTY,
-        JSON.stringify(settings)
-      );
-    }
-
-    return {
-      success: true,
-      settings: settings,
-      migrated: migrated
-    };
-  } catch (err) {
-    return {
-      success: false,
-      settings: null,
-      message: 'Saved UI settings are invalid JSON.'
-    };
-  }
+  return {
+    version: VERRACT_VERSION,
+    contract: 'VERIFY_RESOLVE_ACTION',
+    verifyReportFields: VERIFY_REPORT_FIELDS,
+    resolveReportFields: RESOLVE_REPORT_FIELDS,
+    sharedOutputFields: SHARED_OUTPUT_FIELDS,
+    actionOutputFields: ACTION_OUTPUT_FIELDS,
+    defaultBatchSize: VERRACT_DEFAULT_BATCH_SIZE,
+    maxBatchSize: VERRACT_MAX_BATCH_SIZE
+  };
 }
 
 function SAVE_VERRACT_UI_SETTINGS(payload) {
-  if (!payload || typeof payload !== 'object') {
-    throw new Error('UI settings payload is required.');
+  PropertiesService.getUserProperties().setProperty(
+    'VERRACT_UI_SETTINGS',
+    JSON.stringify(payload || {})
+  );
+  return { ok: true };
+}
+
+function GET_VERRACT_SAVED_UI_SETTINGS() {
+  var raw = PropertiesService.getUserProperties().getProperty(
+    'VERRACT_UI_SETTINGS'
+  );
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    return null;
   }
-
-  payload.savedAt = new Date().toISOString();
-  payload.schemaVersion = 2;
-
-  var serialized = JSON.stringify(payload);
-
-  if (serialized.length > 90000) {
-    throw new Error('UI settings payload is too large.');
-  }
-
-  PropertiesService
-    .getUserProperties()
-    .setProperty(VERRACT_UI_SETTINGS_PROPERTY, serialized);
-
-  return {
-    success: true,
-    savedAt: payload.savedAt,
-    message: 'UI settings saved for the current account.'
-  };
 }
 
 function OPEN_VERRACT_SIDEBAR() {
   var html = HtmlService
     .createHtmlOutputFromFile('sidebar')
     .setTitle('verract');
-
-  SpreadsheetApp
-    .getUi()
-    .showSidebar(html);
+  SpreadsheetApp.getUi().showSidebar(html);
 }
 
 function GET_VERRACT_ACTIVE_SELECTION() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActive();
   var sheet = ss.getActiveSheet();
-  var range = sheet.getActiveRange();
+  var selection = ss.getSelection();
+  var rangeList = selection ? selection.getActiveRangeList() : null;
+  var ranges = rangeList ? rangeList.getRanges() : [];
 
-  if (!range) {
-    return {
-      success: false,
-      message: 'No active range selected.'
-    };
+  if (!ranges.length) {
+    var activeRange = sheet.getActiveRange();
+    ranges = activeRange ? [activeRange] : [];
   }
 
-  var startRow = range.getRow();
-  var endRow =
-    startRow + range.getNumRows() - 1;
+  var rowRanges = ranges.map(function(range) {
+    return {
+      startRow: range.getRow(),
+      endRow: range.getLastRow()
+    };
+  });
 
-  var selection = {
-    success: true,
-    spreadsheetId: ss.getId(),
+  var normalizedRanges = normalizeSelectionRowRanges_(rowRanges);
+  var rowSpec = normalizedRanges.map(function(range) {
+    return range.startRow === range.endRow
+      ? String(range.startRow)
+      : range.startRow + ':' + range.endRow;
+  }).join(',');
+
+  return {
     sheetName: sheet.getName(),
-    a1Notation: range.getA1Notation(),
-    startRow: startRow,
-    endRow: endRow,
-    numRows: range.getNumRows()
+    a1Notation: ranges.map(function(range) {
+      return range.getA1Notation();
+    }).join(','),
+    startRow: normalizedRanges.length ? normalizedRanges[0].startRow : 2,
+    endRow: normalizedRanges.length
+      ? normalizedRanges[normalizedRanges.length - 1].endRow
+      : 2,
+    rowRanges: rowSpec
   };
+}
 
-  saveVerractSelection_(selection);
+function normalizeSelectionRowRanges_(ranges) {
+  var sorted = (ranges || []).slice().sort(function(a, b) {
+    return a.startRow - b.startRow || a.endRow - b.endRow;
+  });
+  var merged = [];
 
-  return selection;
+  sorted.forEach(function(range) {
+    var last = merged.length ? merged[merged.length - 1] : null;
+    if (!last || range.startRow > last.endRow + 1) {
+      merged.push({ startRow: range.startRow, endRow: range.endRow });
+      return;
+    }
+    if (range.endRow > last.endRow) last.endRow = range.endRow;
+  });
+
+  return merged;
 }
 
 function GET_VERRACT_SAVED_SELECTION() {
-  var jsonText =
-    PropertiesService
-      .getScriptProperties()
-      .getProperty(
-        VERRACT_SELECTION_PROPERTY
-      );
-
-  if (!jsonText) {
-    return {
-      success: false,
-      message: 'No saved selection.'
-    };
-  }
-
+  var raw = PropertiesService.getUserProperties().getProperty('VERRACT_SAVED_SELECTION');
+  if (!raw) return null;
   try {
-    var selection = JSON.parse(jsonText);
-
-    if (
-      !selection ||
-      !selection.spreadsheetId ||
-      !selection.sheetName ||
-      !selection.startRow ||
-      !selection.endRow
-    ) {
-      throw new Error(
-        'Invalid saved selection.'
-      );
-    }
-
-    selection.success = true;
-    return selection;
+    return JSON.parse(raw);
   } catch (err) {
-    CLEAR_VERRACT_SAVED_SELECTION();
-
-    return {
-      success: false,
-      message: 'Saved selection is invalid.'
-    };
+    return null;
   }
 }
 
 function CLEAR_VERRACT_SAVED_SELECTION() {
-  PropertiesService
-    .getScriptProperties()
-    .deleteProperty(
-      VERRACT_SELECTION_PROPERTY
-    );
-
-  return {
-    success: true,
-    message: 'Selection cleared.'
-  };
-}
-
-function saveVerractSelection_(selection) {
-  PropertiesService
-    .getScriptProperties()
-    .setProperty(
-      VERRACT_SELECTION_PROPERTY,
-      JSON.stringify(selection)
-    );
+  PropertiesService.getUserProperties().deleteProperty('VERRACT_SAVED_SELECTION');
+  return { ok: true };
 }
 
 function GET_VERRACT_OUTPUT_MAPPING_SETTINGS() {
+  var raw = PropertiesService.getUserProperties().getProperty('VERRACT_OUTPUT_MAPPING');
+  if (!raw) return getDefaultUiMapping_();
+
+  try {
+    var parsed = JSON.parse(raw);
+    return parsed || getDefaultUiMapping_();
+  } catch (err) {
+    return getDefaultUiMapping_();
+  }
+}
+
+function getDefaultUiMapping_() {
   return {
-    success: true,
-    verify:
-      loadSidebarOutputMapping_(
-        VERIFY_OUTPUT_MAPPING_PROPERTY,
-        VERIFY_BASE_OUTPUT_FIELDS
-      ),
-    resolve:
-      loadSidebarOutputMapping_(
-        RESOLVE_OUTPUT_MAPPING_PROPERTY,
-        RESOLVE_BASE_OUTPUT_FIELDS
-      ),
-    shared:
-      loadSidebarOutputMapping_(
-        SHARED_OUTPUT_MAPPING_PROPERTY,
-        SHARED_OUTPUT_FIELDS
-      ),
-    action:
-      loadSidebarOutputMapping_(
-        'ACTION_OUTPUT_MAPPING',
-        ACTION_OUTPUT_FIELDS
-      )
+    verifyMapping: {
+      Exists: '',
+      CheckedPathCount: '',
+      MatchedPathColumn: '',
+      Error: ''
+    },
+    resolveMapping: {
+      ResolveStatus: '',
+      ResolveID: '',
+      ResolveCandidateCount: '',
+      ResolveNote: ''
+    },
+    sharedMapping: {
+      SharedPathID: '',
+      SharedFileID: '',
+      SharedPath: '',
+      SharedFilename: '',
+      SharedSource: ''
+    },
+    actionMapping: {
+      ActionStatus: '',
+      ActionID: '',
+      ActionAt: '',
+      ActionNote: ''
+    }
   };
+}
+
+function saveOutputMappingFromConfig_(config) {
+  var source = config || {};
+  PropertiesService.getUserProperties().setProperty(
+    'VERRACT_OUTPUT_MAPPING',
+    JSON.stringify({
+      verifyMapping: source.verifyMapping || {},
+      resolveMapping: source.resolveMapping || {},
+      sharedMapping: source.sharedMapping || {},
+      actionMapping: source.actionMapping || {}
+    })
+  );
+
+  PropertiesService.getUserProperties().setProperty(
+    'VERRACT_UI_SETTINGS',
+    JSON.stringify(source)
+  );
+}
+
+function START_VERIFY_FROM_UI(config) {
+  return START_VERIFY_FROM_SIDEBAR(config);
+}
+
+function START_RESOLVE_FROM_UI(config) {
+  return START_RESOLVE_FROM_SIDEBAR(config);
 }
 
 function START_VERIFY_FROM_SIDEBAR(config) {
-  var preparedConfig =
-    normalizeSidebarConfig_(config);
-
-  var verifyMapping =
-    normalizeOutputMapping_(
-      normalizeVerifyOutputMappingAliases_(
-        preparedConfig.verifyOutputMapping || {}
-      ),
-      VERIFY_BASE_OUTPUT_FIELDS,
-      null
-    );
-
-  var sharedMapping =
-    normalizeOutputMappingAllowEmpty_(
-      preparedConfig.sharedOutputMapping || {},
-      SHARED_OUTPUT_FIELDS
-    );
-
-  preparedConfig.outputMapping =
-    mergeOutputMappings_(
-      verifyMapping,
-      sharedMapping
-    );
-
-  validateOutputMapping_(
-    preparedConfig.outputMapping,
-    VERIFY_OUTPUT_FIELDS
-  );
-
-  requireOutputMappingFields_(
-    verifyMapping,
-    VERIFY_REQUIRED_OUTPUT_FIELDS,
-    'Verify Output'
-  );
-
-  saveSidebarOutputMappingAllowEmpty_(
-    VERIFY_OUTPUT_MAPPING_PROPERTY,
-    verifyMapping,
-    VERIFY_BASE_OUTPUT_FIELDS
-  );
-
-  saveSidebarOutputMappingAllowEmpty_(
-    SHARED_OUTPUT_MAPPING_PROPERTY,
-    sharedMapping,
-    SHARED_OUTPUT_FIELDS
-  );
-
-  var result =
-    startVerifyAutomation_(
-      preparedConfig
-    );
-
-  return {
-    success: true,
-    mode: result.mode || 'VERIFY',
-    startRow: result.startRow,
-    endRow: result.endRow,
-    batchSize: result.batchSize,
-    triggerGapMinutes:
-      result.triggerGapMinutes,
-    message:
-      result.message ||
-      'Verify automation started.'
-  };
+  saveOutputMappingFromConfig_(config || {});
+  return startVerifyFromUiImpl_(config || {});
 }
 
 function START_RESOLVE_FROM_SIDEBAR(config) {
-  var preparedConfig =
-    normalizeSidebarConfig_(config);
+  saveOutputMappingFromConfig_(config || {});
+  return startResolveFromUiImpl_(config || {});
+}
 
-  var resolveMapping =
-    normalizeOutputMappingAllowEmpty_(
-      preparedConfig.resolveOutputMapping || {},
-      RESOLVE_BASE_OUTPUT_FIELDS
-    );
+function START_ACTION_FROM_UI(config) {
+  saveOutputMappingFromConfig_(config || {});
+  return START_ACTION_FROM_SIDEBAR(config || {});
+}
 
-  var sharedMapping =
-    normalizeOutputMappingAllowEmpty_(
-      preparedConfig.sharedOutputMapping || {},
-      SHARED_OUTPUT_FIELDS
-    );
-
-  preparedConfig.outputMapping =
-    mergeOutputMappings_(
-      resolveMapping,
-      sharedMapping
-    );
-
-  validateOutputMapping_(
-    preparedConfig.outputMapping,
-    RESOLVE_OUTPUT_FIELDS
-  );
-
-  var savedVerifyMapping =
-    loadSidebarOutputMappingAsNumbers_(
-      VERIFY_OUTPUT_MAPPING_PROPERTY,
-      VERIFY_BASE_OUTPUT_FIELDS
-    );
-
-  if (!savedVerifyMapping.Exists) {
-    throw new Error(
-      'Resolve requires Verify Exists output mapping. Run or save Verify mapping with Exists selected first.'
-    );
-  }
-
-  preparedConfig.verifyOutputMapping =
-    savedVerifyMapping;
-
-  saveSidebarOutputMappingAllowEmpty_(
-    RESOLVE_OUTPUT_MAPPING_PROPERTY,
-    resolveMapping,
-    RESOLVE_BASE_OUTPUT_FIELDS
-  );
-
-  saveSidebarOutputMappingAllowEmpty_(
-    SHARED_OUTPUT_MAPPING_PROPERTY,
-    sharedMapping,
-    SHARED_OUTPUT_FIELDS
-  );
-
-  var result =
-    startResolveAutomation_(
-      preparedConfig
-    );
-
+function startVerifyFromUiImpl_(config) {
+  var normalized = normalizeBaseRunConfig_(config, VERRACT_PHASE_VERIFY);
+  normalized.runId = createRunId_('verify');
+  initializeVerractRunState_(normalized);
+  runVerifyRows_(normalized);
   return {
-    success: true,
-    mode: result.mode || 'RESOLVE',
-    startRow: result.startRow,
-    endRow: result.endRow,
-    batchSize: result.batchSize,
-    triggerGapMinutes:
-      result.triggerGapMinutes,
-    message:
-      result.message ||
-      'Resolve automation started.'
+    ok: true,
+    phase: VERRACT_PHASE_VERIFY,
+    runId: normalized.runId,
+    startRow: normalized.startRow,
+    endRow: normalized.endRow
+  };
+}
+
+function startResolveFromUiImpl_(config) {
+  var normalized = normalizeBaseRunConfig_(config, VERRACT_PHASE_RESOLVE);
+  normalized.runId = createRunId_('resolve');
+  runResolveRows_(normalized);
+  return {
+    ok: true,
+    phase: VERRACT_PHASE_RESOLVE,
+    runId: normalized.runId,
+    startRow: normalized.startRow,
+    endRow: normalized.endRow
   };
 }
 
 function GET_VERRACT_ENGINE_STATUS() {
-  var props =
-    PropertiesService
-      .getScriptProperties();
-
-  if (typeof recoverStaleExecutionState_ === 'function') {
-    recoverStaleExecutionState_(props);
-  }
-
-  var engineRunning =
-    props.getProperty(
-      ENGINE_STATE_KEY
-    ) === 'TRUE';
-
-  var pipelineEnabled =
-    props.getProperty('PIPELINE_ENABLED') === 'TRUE';
-
-  var executionActive =
-    props.getProperty('EXECUTION_ACTIVE') === 'TRUE';
-
-  // A Multi-Phase run remains logically active during the short trigger gap
-  // between VERIFY, RESOLVE, and ACTION_PREVIEW, even when the phase engine
-  // temporarily releases the global running flag.
-  var isRunning = engineRunning || pipelineEnabled || executionActive;
-
-  var mode = '';
-
-  if (
-    props.getProperty(
-      'AUTO_CURRENT_ROW'
-    )
-  ) {
-    mode = 'VERIFY';
-  }
-
-  if (
-    props.getProperty(
-      'RESOLVE_CURRENT_ROW'
-    )
-  ) {
-    mode = 'RESOLVE';
-  }
-
-  if (props.getProperty('ACTION_CURRENT_ROW')) {
-    mode = 'ACTION_PREVIEW';
-  }
-
-  var pipelinePhase = props.getProperty('PIPELINE_PHASE') || '';
-  if (pipelineEnabled && pipelinePhase) {
-    mode = 'PIPELINE:' + pipelinePhase;
-  }
-
-  if (executionActive) {
-    mode = 'EXECUTION';
-  }
-
   return {
-    running: isRunning,
-    status:
-      isRunning
-        ? 'Running ' + (mode || 'Engine')
-        : 'Idle',
-    mode: mode,
-    spreadsheetId:
-      props.getProperty(
-        'AUTO_SPREADSHEET_ID'
-      ) ||
-      props.getProperty(
-        'RESOLVE_SPREADSHEET_ID'
-      ) ||
-      props.getProperty('ACTION_SPREADSHEET_ID') ||
-      props.getProperty('EXECUTION_SPREADSHEET_ID') ||
-      '',
-    sheetName:
-      props.getProperty(
-        'AUTO_SHEET_NAME'
-      ) ||
-      props.getProperty(
-        'RESOLVE_SHEET_NAME'
-      ) ||
-      props.getProperty('ACTION_SHEET_NAME') ||
-      props.getProperty('EXECUTION_SHEET_NAME') ||
-      '',
-    currentRow:
-      props.getProperty(
-        'AUTO_CURRENT_ROW'
-      ) ||
-      props.getProperty(
-        'RESOLVE_CURRENT_ROW'
-      ) ||
-      props.getProperty('ACTION_CURRENT_ROW') ||
-      props.getProperty('EXECUTION_CURRENT_ROW') ||
-      '',
-    endRow:
-      props.getProperty(
-        'AUTO_END_ROW'
-      ) ||
-      props.getProperty(
-        'RESOLVE_END_ROW'
-      ) ||
-      props.getProperty('ACTION_END_ROW') ||
-      props.getProperty('EXECUTION_END_ROW') ||
-      '',
-    batchSize:
-      props.getProperty(
-        'DYNAMIC_BATCH_SIZE'
-      ) ||
-      props.getProperty(
-        'RESOLVE_BATCH_SIZE'
-      ) ||
-      props.getProperty('ACTION_BATCH_SIZE') ||
-      props.getProperty('EXECUTION_BATCH_SIZE') ||
-      '',
-    lastSuccessTimestamp:
-      (executionActive
-        ? props.getProperty(
-            'EXECUTION_LAST_SUCCESS_TS'
-          )
-        : '') ||
-      props.getProperty(
-        'AUTO_LAST_SUCCESS_TS'
-      ) ||
-      props.getProperty(
-        'RESOLVE_LAST_SUCCESS_TS'
-      ) ||
-      props.getProperty('ACTION_LAST_SUCCESS_TS') ||
-      props.getProperty('EXECUTION_LAST_SUCCESS_TS') ||
-      '',
-    lastError:
-      props.getProperty(
-        'AUTO_LAST_ERROR'
-      ) ||
-      props.getProperty(
-        'RESOLVE_LAST_ERROR'
-      ) ||
-      props.getProperty('EXECUTION_LAST_ERROR') ||
-      ''
+    activePhase: getVerractState_(VERRACT_STATE_KEYS.ACTIVE_PHASE) || '',
+    currentRow: getVerractState_(VERRACT_STATE_KEYS.CURRENT_ROW) || '',
+    endRow: getVerractState_(VERRACT_STATE_KEYS.END_ROW) || '',
+    lastStatus: getVerractState_(VERRACT_STATE_KEYS.LAST_STATUS) || ''
   };
 }
 
 function STOP_VERRACT_FROM_SIDEBAR() {
   CLEAR_TRIGGER_AND_STATE();
-
-  return {
-    success: true,
-    message:
-      'verract stopped and state cleared.'
-  };
+  return { ok: true };
 }
 
 function RUN_DIAGNOSTICS_FROM_SIDEBAR() {
   CHECK_SYSTEM_DIAGNOSTICS();
-
-  return {
-    success: true,
-    message: 'Diagnostics completed.'
-  };
-}
-
-function normalizeSidebarConfig_(config) {
-  if (!config) {
-    throw new Error(
-      'Missing sidebar config.'
-    );
-  }
-
-  var startRow =
-    parseInt(config.startRow, 10);
-
-  var endRow =
-    parseInt(config.endRow, 10);
-
-  if (
-    !startRow ||
-    !endRow ||
-    endRow < startRow
-  ) {
-    throw new Error(
-      'Invalid selected range. Set Selection from the Home page first.'
-    );
-  }
-
-  if (!config.spreadsheetId) {
-    throw new Error(
-      'Missing spreadsheet ID from selected range.'
-    );
-  }
-
-  if (!config.sheetName) {
-    throw new Error(
-      'Missing sheet name from selected range.'
-    );
-  }
-
-  config.startRow = startRow;
-  config.endRow = endRow;
-  config.batchSize =
-    parseInt(config.batchSize, 10);
-  config.triggerGapMinutes =
-    parseInt(
-      config.triggerGapMinutes,
-      10
-    );
-
-  config.pathColumns =
-    normalizeSidebarColumnText_(
-      config.pathColumns
-    );
-  config.fileColumn =
-    normalizeSidebarColumnText_(
-      config.fileColumn
-    );
-  config.extensionColumn =
-    normalizeSidebarColumnText_(
-      config.extensionColumn
-    );
-  config.rootIdColumn =
-    normalizeSidebarColumnText_(
-      config.rootIdColumn
-    );
-
-  return config;
-}
-
-function normalizeSidebarColumnText_(value) {
-  return value
-    ? value.toString().trim().toUpperCase()
-    : '';
-}
-
-function mergeOutputMappings_(a, b) {
-  var result = {};
-  var key;
-
-  for (key in a || {}) {
-    if (a.hasOwnProperty(key)) {
-      result[key] = a[key];
-    }
-  }
-
-  for (key in b || {}) {
-    if (b.hasOwnProperty(key)) {
-      result[key] = b[key];
-    }
-  }
-
-  return result;
-}
-
-function normalizeOutputMappingAllowEmpty_(
-  mapping,
-  allowedFields
-) {
-  var normalized = {};
-
-  if (!mapping) {
-    return normalized;
-  }
-
-  for (
-    var i = 0;
-    i < allowedFields.length;
-    i++
-  ) {
-    var field = allowedFields[i];
-    var columnValue = mapping[field];
-
-    if (
-      columnValue === null ||
-      columnValue === undefined ||
-      columnValue === ''
-    ) {
-      continue;
-    }
-
-    normalized[field] =
-      normalizeOutputColumnValue_(
-        columnValue
-      );
-  }
-
-  if (Object.keys(normalized).length > 0) {
-    var validation =
-      validateOutputMapping_(
-        normalized,
-        allowedFields
-      );
-
-    if (!validation.isValid) {
-      throw new Error(
-        validation.error
-      );
-    }
-  }
-
-  return normalized;
-}
-
-function normalizeVerifyOutputMappingAliases_(
-  mapping
-) {
-  var normalized = {};
-
-  for (var field in mapping || {}) {
-    if (mapping.hasOwnProperty(field)) {
-      normalized[field] = mapping[field];
-    }
-  }
-
-  if (
-    !normalized.Type &&
-    normalized.FileType
-  ) {
-    normalized.Type =
-      normalized.FileType;
-  }
-
-  delete normalized.FileType;
-  return normalized;
-}
-
-function saveSidebarOutputMappingAllowEmpty_(
-  propertyName,
-  mapping,
-  allowedFields
-) {
-  var normalized =
-    normalizeOutputMappingAllowEmpty_(
-      mapping,
-      allowedFields
-    );
-
-  PropertiesService
-    .getScriptProperties()
-    .setProperty(
-      propertyName,
-      JSON.stringify(normalized)
-    );
-}
-
-function loadSidebarOutputMapping_(
-  propertyName,
-  allowedFields
-) {
-  var numericMapping =
-    loadSidebarOutputMappingAsNumbers_(
-      propertyName,
-      allowedFields
-    );
-
-  return convertOutputMappingToLetters_(
-    numericMapping,
-    allowedFields
-  );
-}
-
-function loadSidebarOutputMappingAsNumbers_(
-  propertyName,
-  allowedFields
-) {
-  var jsonText =
-    PropertiesService
-      .getScriptProperties()
-      .getProperty(propertyName);
-
-  if (!jsonText) {
-    return {};
-  }
-
-  try {
-    var parsedMapping =
-      JSON.parse(jsonText);
-
-    if (
-      allowedFields.indexOf('Type') >= 0
-    ) {
-      parsedMapping =
-        normalizeVerifyOutputMappingAliases_(
-          parsedMapping
-        );
-    }
-
-    return normalizeOutputMappingAllowEmpty_(
-      parsedMapping,
-      allowedFields
-    );
-  } catch (err) {
-    return {};
-  }
-}
-
-function convertOutputMappingToLetters_(
-  numericMapping,
-  allowedFields
-) {
-  var result = {};
-
-  for (
-    var i = 0;
-    i < allowedFields.length;
-    i++
-  ) {
-    var field = allowedFields[i];
-    var column = numericMapping[field];
-
-    if (column) {
-      result[field] =
-        convertColumnToLetter_(
-          column
-        );
-    }
-  }
-
-  return result;
-}
-
-
-function START_ACTION_FROM_SIDEBAR(config) {
-  var normalized = normalizeSidebarConfig_(config || {});
-  var result = startActionPreviewAutomation_(normalized);
-  return result;
+  return { ok: true };
 }
 
 function START_MULTI_PHASE_FROM_SIDEBAR(config) {
-  if (!config) {
-    throw new Error(
-      'Multi-Phase config is required.'
-    );
-  }
-
-  var verifyConfig =
-    normalizeSidebarConfig_(
-      config.verify || {}
-    );
-
-  var resolveConfig =
-    normalizeSidebarConfig_(
-      config.resolve || {}
-    );
-
-  var actionConfig =
-    normalizeSidebarConfig_(
-      config.action || {}
-    );
-
-  var phases = config.phases || {};
-  var runVerify = phases.verify !== false;
-  var runResolve = phases.resolve === true;
-  var runAction = phases.action === true;
-
-  if (runResolve || runAction) {
-    runVerify = true;
-  }
-
-  var verifyMapping =
-    normalizeOutputMapping_(
-      normalizeVerifyOutputMappingAliases_(
-        verifyConfig.verifyOutputMapping || {}
-      ),
-      VERIFY_BASE_OUTPUT_FIELDS,
-      null
-    );
-
-  var resolveMapping =
-    normalizeOutputMappingAllowEmpty_(
-      resolveConfig.resolveOutputMapping || {},
-      RESOLVE_BASE_OUTPUT_FIELDS
-    );
-
-  var sharedMapping =
-    normalizeOutputMappingAllowEmpty_(
-      config.workflowSharedMapping ||
-      verifyConfig.sharedOutputMapping ||
-      resolveConfig.sharedOutputMapping ||
-      {},
-      SHARED_OUTPUT_FIELDS
-    );
-
-  var pipelineMapping =
-    normalizeOutputMappingAllowEmpty_(
-      config.workflowPipelineMapping ||
-      {},
-      PIPELINE_OUTPUT_FIELDS
-    );
-
-  var actionMapping =
-    normalizeOutputMappingAllowEmpty_(
-      actionConfig.actionOutputMapping || {},
-      ACTION_OUTPUT_FIELDS
-    );
-
-  verifyConfig.outputMapping =
-    mergeOutputMappings_(
-      verifyMapping,
-      sharedMapping
-    );
-
-  resolveConfig.outputMapping =
-    mergeOutputMappings_(
-      resolveMapping,
-      sharedMapping
-    );
-
-  resolveConfig.verifyOutputMapping =
-    verifyMapping;
-
-  actionConfig.actionOutputMapping =
-    actionMapping;
-
-  actionConfig.workflowOutputMapping =
-    pipelineMapping;
-
-  actionConfig.sourcePathIdColumn =
-    sharedMapping.SharedPathID;
-
-  actionConfig.sourceFileIdColumn =
-    sharedMapping.SharedFileID;
-
-  if (runVerify) {
-    validateOutputMapping_(
-      verifyConfig.outputMapping,
-      VERIFY_OUTPUT_FIELDS
-    );
-  }
-
-  if (runResolve) {
-    validateOutputMapping_(
-      resolveConfig.outputMapping,
-      RESOLVE_OUTPUT_FIELDS
-    );
-  }
-
-  if (runAction) {
-    validateOutputMapping_(
-      actionMapping,
-      ACTION_OUTPUT_FIELDS
-    );
-  }
-
-  if (
-    runVerify &&
-    !verifyMapping.Exists
-  ) {
-    throw new Error(
-      'Verify Exists mapping is required for the selected phases.'
-    );
-  }
-
-  if (runResolve || runAction) {
-    requireOutputMappingFields_(
-      sharedMapping,
-      actionConfig.sourceObjectMode === 'FOLDER'
-        ? FOLDER_OBJECT_RESULT_REQUIRED_FIELDS
-        : FILE_OBJECT_RESULT_REQUIRED_FIELDS,
-      'Object Result'
-    );
-  }
-
-  if (runAction) {
-    requireOutputMappingFields_(
-      actionMapping,
-      ACTION_REQUIRED_OUTPUT_FIELDS,
-      'Action Output'
-    );
-  }
-
-  if (runAction) {
-    requireOutputMappingFields_(
-      pipelineMapping,
-      PIPELINE_REQUIRED_OUTPUT_FIELDS,
-      'Workflow Result'
-    );
-  }
-
-  saveSidebarOutputMappingAllowEmpty_(
-    VERIFY_OUTPUT_MAPPING_PROPERTY,
-    verifyMapping,
-    VERIFY_BASE_OUTPUT_FIELDS
-  );
-
-  saveSidebarOutputMappingAllowEmpty_(
-    RESOLVE_OUTPUT_MAPPING_PROPERTY,
-    resolveMapping,
-    RESOLVE_BASE_OUTPUT_FIELDS
-  );
-
-  saveSidebarOutputMappingAllowEmpty_(
-    SHARED_OUTPUT_MAPPING_PROPERTY,
-    sharedMapping,
-    SHARED_OUTPUT_FIELDS
-  );
-
-  saveSidebarOutputMappingAllowEmpty_(
-    'PIPELINE_OUTPUT_MAPPING',
-    pipelineMapping,
-    PIPELINE_OUTPUT_FIELDS
-  );
-
-  saveSidebarOutputMappingAllowEmpty_(
-    'ACTION_OUTPUT_MAPPING',
-    actionMapping,
-    ACTION_OUTPUT_FIELDS
-  );
-
-  actionConfig.pipelineMode = true;
-  actionConfig.sourceObjectMode = String(
-    actionConfig.sourceObjectMode || 'FILE'
-  ).trim().toUpperCase();
-
-  actionConfig.verifyExistsColumn =
-    verifyMapping.Exists;
-
-  actionConfig.verifyFileIdColumn =
-    verifyMapping.FileID || 0;
-
-  actionConfig.verifyPathIdColumn =
-    verifyMapping.PathID || 0;
-
-  actionConfig.resolvedIdColumn =
-    resolveMapping.ResolvedID || 0;
-
-  actionConfig.resolveStatusColumn =
-    resolveMapping.ResolveStatus || 0;
-
-  actionConfig.resolveMatchCountColumn =
-    resolveMapping.MatchCount || 0;
-
-  actionConfig.sourceLabelColumn =
-    sharedMapping.SharedSource || 0;
-
-  actionConfig.sourcePathColumn =
-    sharedMapping.SharedPath || 0;
-
-  actionConfig.sourceObjectNameColumn =
-    sharedMapping.SharedFilename || 0;
-
-  return startMultiPhasePipeline_({
-    verify: verifyConfig,
-    resolve: resolveConfig,
-    action: actionConfig,
-    phases: {
-      verify: runVerify,
-      resolve: runResolve,
-      action: runAction
-    }
-  });
-}
-
-
-function GET_EXECUTION_STATUS_FROM_SIDEBAR() {
-  var p=PropertiesService.getScriptProperties();
-  return {running:p.getProperty('EXECUTION_ACTIVE')==='TRUE',runId:p.getProperty('EXECUTION_RUN_ID')||'',currentRow:p.getProperty('EXECUTION_CURRENT_ROW')||'',endRow:p.getProperty('EXECUTION_END_ROW')||''};
+  return {
+    ok: false,
+    status: 'MULTI_PHASE_DISABLED',
+    message: 'Multi-Phase is disabled. Run Verify, Resolve, and Action explicitly.'
+  };
 }

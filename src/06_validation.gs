@@ -1,1182 +1,213 @@
-function parseColumnSelection_(inputText) {
-  if (!inputText) {
-    return {
-      isValid: false,
-      columns: [],
-      error: 'Path column input tidak boleh kosong.'
-    };
-  }
-  var normalizedInput = inputText
-    .toString()
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, '');
-  if (!normalizedInput) {
-    return {
-      isValid: false,
-      columns: [],
-      error: 'Path column input tidak boleh kosong.'
-    };
-  }
-  var tokens = normalizedInput
-    .split(',')
-    .filter(String);
-  var columns = [];
-  var seen = {};
-  for (var i = 0; i < tokens.length; i++) {
-    var token = tokens[i];
-    if (token.indexOf('-') !== -1) {
-      var rangeParts = token.split('-');
-      if (rangeParts.length !== 2) {
-        return {
-          isValid: false,
-          columns: [],
-          error: 'Format range tidak valid: ' + token
-        };
-      }
-      var startLetter = rangeParts[0];
-      var endLetter = rangeParts[1];
-      if (
-        !isValidColumnLetter_(startLetter) ||
-        !isValidColumnLetter_(endLetter)
-      ) {
-        return {
-          isValid: false,
-          columns: [],
-          error: 'Range kolom tidak valid: ' + token
-        };
-      }
-      var firstColumn =
-        convertLetterToColumn(startLetter);
-      var secondColumn =
-        convertLetterToColumn(endLetter);
-      var startColumn = Math.min(
-        firstColumn,
-        secondColumn
-      );
-      var endColumn = Math.max(
-        firstColumn,
-        secondColumn
-      );
-      for (
-        var currentColumn = startColumn;
-        currentColumn <= endColumn;
-        currentColumn++
-      ) {
-        if (!seen[currentColumn]) {
-          seen[currentColumn] = true;
-          columns.push(currentColumn);
-        }
-      }
-      continue;
-    }
-    if (!isValidColumnLetter_(token)) {
-      return {
-        isValid: false,
-        columns: [],
-        error: 'Kolom tidak valid: ' + token
-      };
-    }
-    var columnNumber =
-      convertLetterToColumn(token);
-    if (!seen[columnNumber]) {
-      seen[columnNumber] = true;
-      columns.push(columnNumber);
-    }
-  }
-  if (
-    columns.length <
-    MIN_PATH_COLUMN_COUNT
-  ) {
-    return {
-      isValid: false,
-      columns: [],
-      error:
-        'Minimal pilih ' +
-        MIN_PATH_COLUMN_COUNT +
-        ' path column.'
-    };
-  }
-  return {
-    isValid: true,
-    columns: columns,
-    error: ''
-  };
-}
-
-function validateFileColumn_(fileColumnText) {
-  var normalized = fileColumnText
-    ? fileColumnText
-        .toString()
-        .trim()
-        .toUpperCase()
-    : '';
-  if (!isValidColumnLetter_(normalized)) {
-    return {
-      isValid: false,
-      column: 0,
-      error:
-        'Column harus berupa huruf kolom valid.\n' +
-        'Contoh: J, AA, AB'
-    };
-  }
-  return {
-    isValid: true,
-    column: convertLetterToColumn(normalized),
-    error: ''
-  };
-}
-
-function validateOptionalExtensionColumn_(
-  extensionColumnText
-) {
-  var normalized = extensionColumnText
-    ? extensionColumnText
-        .toString()
-        .trim()
-        .toUpperCase()
-    : '';
-  if (!normalized) {
-    return {
-      isValid: true,
-      column: 0,
-      error: ''
-    };
-  }
-  if (!isValidColumnLetter_(normalized)) {
-    return {
-      isValid: false,
-      column: 0,
-      error:
-        'Extension column harus berupa huruf kolom valid.\n' +
-        'Contoh: H, AA, AB\n\n' +
-        'Kosongkan jika extension tidak dipisah.'
-    };
-  }
-  return {
-    isValid: true,
-    column: convertLetterToColumn(normalized),
-    error: ''
-  };
-}
-
-function validateInputColumns_(
-  pathColumns,
-  fileColumn,
-  rootIdColumn,
-  extensionColumn
-) {
-  if (
-    !pathColumns ||
-    pathColumns.length === 0
-  ) {
-    return {
-      isValid: false,
-      error:
-        'Minimal satu path column harus dipilih.'
-    };
-  }
-  if (
-    fileColumn &&
-    fileColumn === rootIdColumn
-  ) {
-    return {
-      isValid: false,
-      error:
-        'File column dan RootID column tidak boleh sama.'
-    };
-  }
-  if (
-    extensionColumn &&
-    !fileColumn
-  ) {
-    return {
-      isValid: false,
-      error:
-        'Extension column hanya boleh dipakai jika File column diisi.'
-    };
-  }
-  if (
-    extensionColumn &&
-    fileColumn &&
-    extensionColumn === fileColumn
-  ) {
-    return {
-      isValid: false,
-      error:
-        'Extension column tidak boleh sama dengan File column.'
-    };
-  }
-  if (
-    extensionColumn &&
-    extensionColumn === rootIdColumn
-  ) {
-    return {
-      isValid: false,
-      error:
-        'Extension column tidak boleh sama dengan RootID column.'
-    };
-  }
-  for (
-    var i = 0;
-    i < pathColumns.length;
-    i++
-  ) {
-    if (
-      fileColumn &&
-      pathColumns[i] === fileColumn
-    ) {
-      return {
-        isValid: false,
-        error:
-          'File column tidak boleh digunakan sebagai path column.'
-      };
-    }
-    if (pathColumns[i] === rootIdColumn) {
-      return {
-        isValid: false,
-        error:
-          'RootID column tidak boleh digunakan sebagai path column.'
-      };
-    }
-    if (
-      extensionColumn &&
-      pathColumns[i] === extensionColumn
-    ) {
-      return {
-        isValid: false,
-        error:
-          'Extension column tidak boleh digunakan sebagai path column.'
-      };
-    }
-  }
-  return {
-    isValid: true,
-    error: ''
-  };
-}
-
-function confirmLargePathColumnSelection_(
-  pathColumnCount
-) {
-  if (
-    pathColumnCount <=
-    PATH_COLUMN_WARNING_THRESHOLD
-  ) {
-    return true;
-  }
-  var ui = SpreadsheetApp.getUi();
-  var response = ui.alert(
-    '⚠️ Large Path Column Selection',
-    'Anda memilih ' +
-      pathColumnCount +
-      ' path columns.\n\n' +
-      'Semakin banyak path columns, semakin besar beban verifikasi.\n\n' +
-      'Klik OK untuk lanjut.\n' +
-      'Klik Cancel untuk membatalkan.',
-    ui.ButtonSet.OK_CANCEL
-  );
-  return response === ui.Button.OK;
-}
-
-function validateVerifyWorkload_(
-  batchSize,
-  pathColumnCount
-) {
-  var estimatedAttempts =
-    batchSize * pathColumnCount;
-  if (
-    estimatedAttempts <=
-    MAX_VERIFY_ATTEMPTS_PER_BATCH
-  ) {
-    return {
-      isValid: true,
-      estimatedAttempts:
-        estimatedAttempts,
-      error: ''
-    };
-  }
-  return {
-    isValid: false,
-    estimatedAttempts:
-      estimatedAttempts,
-    error:
-      'Estimated verify attempts terlalu besar.\n\n' +
-      'Batch size: ' +
-      batchSize +
-      '\n' +
-      'Path columns: ' +
-      pathColumnCount +
-      '\n' +
-      'Estimated attempts: ' +
-      estimatedAttempts +
-      '\n' +
-      'Maximum allowed: ' +
-      MAX_VERIFY_ATTEMPTS_PER_BATCH +
-      '\n\n' +
-      'Kurangi batch size atau jumlah path columns.'
-  };
-}
-
-function confirmOutputDoesNotOverlapInputs_(
-  pathColumns,
-  fileColumn,
-  rootIdColumn,
-  extensionColumn,
-  targetColumn,
-  outputWidth
-) {
-  var outputStart = targetColumn;
-  var outputEnd =
-    targetColumn + outputWidth - 1;
-var inputColumns =
-  pathColumns.slice();
-if (fileColumn) {
-  inputColumns.push(fileColumn);
-}
-inputColumns.push(rootIdColumn);
-if (extensionColumn) {
-  inputColumns.push(extensionColumn);
-}
-  var overlappingColumns = [];
-  var seen = {};
-  for (
-    var i = 0;
-    i < inputColumns.length;
-    i++
-  ) {
-    var inputColumn =
-      inputColumns[i];
-    if (seen[inputColumn]) {
-      continue;
-    }
-    seen[inputColumn] = true;
-    if (
-      inputColumn >= outputStart &&
-      inputColumn <= outputEnd
-    ) {
-      overlappingColumns.push(
-        convertColumnToLetter_(
-          inputColumn
-        )
-      );
-    }
-  }
-  if (
-    overlappingColumns.length === 0
-  ) {
-    return true;
-  }
-  SpreadsheetApp.getUi().alert(
-    '⚠️ Output Overlaps Input',
-    'Output range bertabrakan dengan input column:\n\n' +
-      overlappingColumns.join(', ') +
-      '\n\n' +
-      'Pilih output column lain.',
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
-  return false;
-}
-
-function confirmOutputWithinSheetBoundary_(
-  sheet,
-  targetColumn,
-  outputWidth
-) {
-  var maxColumns =
-    sheet.getMaxColumns();
-  var outputEndColumn =
-    targetColumn + outputWidth - 1;
-  if (
-    outputEndColumn <= maxColumns
-  ) {
-    return true;
-  }
-  SpreadsheetApp.getUi().alert(
-    '⚠️ Output Exceeds Sheet Boundary',
-    'Output membutuhkan kolom sampai ' +
-      convertColumnToLetter_(
-        outputEndColumn
-      ) +
-      ', sedangkan sheet hanya sampai ' +
-      convertColumnToLetter_(
-        maxColumns
-      ) +
-      '.\n\n' +
-      'Tambahkan kolom atau pilih output column yang lebih awal.',
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
-  return false;
-}
-
-function confirmNonBlankMainOutput_(
-  sheet,
-  startRow,
-  targetColumn,
-  numRows
-) {
-  var values = sheet
-    .getRange(
-      startRow,
-      targetColumn,
-      numRows,
-      1
-    )
-    .getValues();
-  var nonBlankCount = 0;
-  for (
-    var i = 0;
-    i < values.length;
-    i++
-  ) {
-    if (values[i][0] !== '') {
-      nonBlankCount++;
-    }
-  }
-  if (nonBlankCount === 0) {
-    return true;
-  }
-  var ui = SpreadsheetApp.getUi();
-  var response = ui.alert(
-    '⚠️ Output Already Exists',
-    'Ditemukan ' +
-      nonBlankCount +
-      ' row pada output utama yang sudah berisi data.\n' +
-      'Row tersebut akan dilewati oleh sistem.\n\n' +
-      'Klik OK untuk lanjut.\n' +
-      'Klik Cancel untuk membatalkan.',
-    ui.ButtonSet.OK_CANCEL
-  );
-  return response === ui.Button.OK;
-}
-
-function normalizeOutputMapping_(
-  mapping,
-  allowedFields,
-  fallbackStartColumn
-) {
-  var normalized = {};
-  var hasMapping =
-    mapping !== null &&
-    mapping !== undefined;
-
-  if (
-    !hasMapping &&
-    fallbackStartColumn
-  ) {
-    return buildSequentialOutputMapping_(
-      allowedFields,
-      fallbackStartColumn
-    );
-  }
-
-  if (!mapping) {
-    mapping = {};
-  }
-
-  for (
-    var i = 0;
-    i < allowedFields.length;
-    i++
-  ) {
-    var field = allowedFields[i];
-    var columnValue = mapping[field];
-
-    if (
-      columnValue === null ||
-      columnValue === undefined ||
-      columnValue === ''
-    ) {
-      continue;
-    }
-
-    var columnNumber =
-      normalizeOutputColumnValue_(
-        columnValue
-      );
-
-    normalized[field] = columnNumber;
-  }
-
-  var validation =
-    validateOutputMapping_(
-      normalized,
-      allowedFields
-    );
-
-  if (!validation.isValid) {
-    throw new Error(
-      validation.error
-    );
-  }
-
-  return normalized;
-}
-
-function normalizeOutputColumnValue_(
-  columnValue
-) {
-  if (
-    typeof columnValue === 'number' &&
-    columnValue > 0
-  ) {
-    return columnValue;
-  }
-
-  var text = columnValue
-    ? columnValue.toString().trim().toUpperCase()
-    : '';
-
-  if (!text) {
-    throw new Error(
-      'Output column tidak boleh kosong.'
-    );
-  }
-
-  if (!isValidColumnLetter_(text)) {
-    throw new Error(
-      'Output column tidak valid: ' + text
-    );
-  }
-
-  return convertLetterToColumn(text);
-}
-
-function buildSequentialOutputMapping_(
-  fields,
-  startColumn
-) {
-  var mapping = {};
-  var start =
-    typeof startColumn === 'number'
-      ? startColumn
-      : normalizeOutputColumnValue_(
-          startColumn
-        );
-
-  for (
-    var i = 0;
-    i < fields.length;
-    i++
-  ) {
-    mapping[fields[i]] = start + i;
-  }
-
-  return mapping;
-}
-
-function validateOutputMapping_(
-  mapping,
-  allowedFields
-) {
-  var selectedCount = 0;
-  var seenColumns = {};
-  var allowedMap = {};
-
-  for (
-    var i = 0;
-    i < allowedFields.length;
-    i++
-  ) {
-    allowedMap[allowedFields[i]] = true;
-  }
-
-  for (var field in mapping) {
-    if (!mapping.hasOwnProperty(field)) {
-      continue;
-    }
-
-    if (!allowedMap[field]) {
-      return {
-        isValid: false,
-        error:
-          'Unknown output field: ' +
-          field
-      };
-    }
-
-    var columnNumber =
-      parseInt(mapping[field], 10);
-
-    if (
-      isNaN(columnNumber) ||
-      columnNumber < 1
-    ) {
-      return {
-        isValid: false,
-        error:
-          'Invalid output column for ' +
-          field +
-          '.'
-      };
-    }
-
-    if (seenColumns[columnNumber]) {
-      return {
-        isValid: false,
-        error:
-          'Duplicate output column: ' +
-          convertColumnToLetter_(
-            columnNumber
-          )
-      };
-    }
-
-    seenColumns[columnNumber] = true;
-    selectedCount++;
-  }
-
-  if (selectedCount === 0) {
-    return {
-      isValid: false,
-      error:
-        'At least one output field must be selected.'
-    };
-  }
-
-  return {
-    isValid: true,
-    error: ''
-  };
-}
-
-function requireOutputMappingFields_(
-  mapping,
-  requiredFields,
-  label
-) {
-  mapping = mapping || {};
-  var missing = [];
-
-  for (
-    var i = 0;
-    i < requiredFields.length;
-    i++
-  ) {
-    if (!mapping[requiredFields[i]]) {
-      missing.push(requiredFields[i]);
-    }
-  }
-
-  if (missing.length) {
-    throw new Error(
-      label +
-      ' mapping is required for: ' +
-      missing.join(', ') +
-      '.'
-    );
-  }
-
-  return true;
-}
-
-function serializeOutputMapping_(
-  mapping
-) {
-  return JSON.stringify(
-    mapping || {}
-  );
-}
-
-function parseStoredOutputMapping_(
-  jsonText,
-  allowedFields,
-  fallbackStartColumn
-) {
-  if (!jsonText) {
-    return normalizeOutputMapping_(
-      null,
-      allowedFields,
-      fallbackStartColumn
-    );
-  }
-
-  try {
-    return normalizeOutputMapping_(
-      JSON.parse(jsonText),
-      allowedFields,
-      fallbackStartColumn
-    );
-  } catch (err) {
-    return normalizeOutputMapping_(
-      null,
-      allowedFields,
-      fallbackStartColumn
-    );
-  }
-}
-
-function readMappedOutputRows_(
-  sheet,
-  startRow,
-  numRows,
-  mapping,
-  fields
-) {
-  var rows = [];
-
-  for (
-    var r = 0;
-    r < numRows;
-    r++
-  ) {
-    rows.push({});
-  }
-
-  for (
-    var i = 0;
-    i < fields.length;
-    i++
-  ) {
-    var field = fields[i];
-    var column = mapping[field];
-
-    if (!column) {
-      continue;
-    }
-
-    var values = sheet
-      .getRange(
-        startRow,
-        column,
-        numRows,
-        1
-      )
-      .getValues();
-
-    for (
-      var rowIndex = 0;
-      rowIndex < numRows;
-      rowIndex++
-    ) {
-      rows[rowIndex][field] =
-        values[rowIndex][0];
-    }
-  }
-
-  return rows;
-}
-
-function writeMappedOutputRows_(
-  sheet,
-  startRow,
-  rowObjects,
-  mapping,
-  fields
-) {
-  var numRows = rowObjects.length;
-
-  if (numRows === 0) {
-    return;
-  }
-
-  var sharedFieldMap = {};
-
-  if (
-    typeof SHARED_OUTPUT_FIELDS !==
-    'undefined'
-  ) {
-    for (
-      var sharedIndex = 0;
-      sharedIndex < SHARED_OUTPUT_FIELDS.length;
-      sharedIndex++
-    ) {
-      sharedFieldMap[
-        SHARED_OUTPUT_FIELDS[sharedIndex]
-      ] = true;
-    }
-  }
-
-  for (
-    var i = 0;
-    i < fields.length;
-    i++
-  ) {
-    var field = fields[i];
-    var column = mapping[field];
-
-    if (!column) {
-      continue;
-    }
-
-    var existingValues = null;
-
-    if (sharedFieldMap[field]) {
-      existingValues = sheet
-        .getRange(
-          startRow,
-          column,
-          numRows,
-          1
-        )
-        .getValues();
-    }
-
-    var values = [];
-
-    for (
-      var rowIndex = 0;
-      rowIndex < numRows;
-      rowIndex++
-    ) {
-      var nextValue =
-        rowObjects[rowIndex][field] ===
-          undefined
-          ? ''
-          : rowObjects[rowIndex][field];
-
-      if (
-        sharedFieldMap[field] &&
-        (nextValue === '' ||
-          nextValue === null ||
-          nextValue === undefined)
-      ) {
-        nextValue = existingValues[rowIndex][0];
-      }
-
-      values.push([nextValue]);
-    }
-
-    sheet
-      .getRange(
-        startRow,
-        column,
-        numRows,
-        1
-      )
-      .setValues(values);
-  }
-}
-
-function convertVerifyResultToObject_(
-  result
-) {
-  var exists = !!result.exists;
-  var fileId = exists
-    ? result.fileId || ''
-    : '';
-  var pathId = exists
-    ? result.pathId ||
-      result.parentId ||
-      ''
-    : '';
-  var verifiedPath = exists
-    ? result.verifiedFilePath || ''
-    : '';
-  var splitPath =
-    splitPathAndFilename_(verifiedPath);
-
-  return {
-    Exists: result.exists,
-    Type:
-      result.type ||
-      result.fileType ||
-      '',
-    CheckedPathCount:
-      result.checkedPathCount || 0,
-    MatchedPathColumn:
-      result.matchedPathColumn || '',
-    FileID: result.fileId || '',
-    PathID:
-      result.pathId ||
-      result.parentId ||
-      '',
-    VerifiedFilePath:
-      result.verifiedFilePath || '',
-    Error: result.error || '',
-    SharedPathID: pathId,
-    SharedFileID: fileId,
-    SharedPath: fileId
-      ? splitPath.path
-      : verifiedPath,
-    SharedFilename: fileId
-      ? splitPath.filename
-      : '',
-    SharedSource: fileId || pathId
-      ? 'VERIFY'
-      : ''
-  };
-}
-
-function buildVerifyOutputObject_(
-  exists,
-  type,
-  checkedPathCount,
-  matchedPathColumn,
-  fileId,
-  pathId,
-  verifiedFilePath,
-  error
-) {
-  var isValid = !!exists;
-  var splitPath =
-    splitPathAndFilename_(
-      verifiedFilePath || ''
-    );
-
-  return {
-    Exists: exists,
-    Type: type || '',
-    CheckedPathCount:
-      checkedPathCount || 0,
-    MatchedPathColumn:
-      matchedPathColumn || '',
-    FileID: fileId || '',
-    PathID: pathId || '',
-    VerifiedFilePath:
-      verifiedFilePath || '',
-    Error: error || '',
-    SharedPathID: isValid
-      ? pathId || ''
-      : '',
-    SharedFileID: isValid
-      ? fileId || ''
-      : '',
-    SharedPath: isValid
-      ? splitPath.path
-      : '',
-    SharedFilename: isValid
-      ? splitPath.filename
-      : '',
-    SharedSource:
-      isValid && (fileId || pathId)
-        ? 'VERIFY'
-        : ''
-  };
-}
-
-function convertResolveRowToObject_(
-  row
-) {
-  row = row || [];
-
-  var status = row[0] || '';
-  var resolvedId = row[1] || '';
-  var resolvedType = row[2] || '';
-  var resolvedPath = row[3] || '';
-  var matchCount = parseInt(row[4] || 0, 10);
-  var canShare =
-    status === 'FOUND_SINGLE' &&
-    matchCount === 1 &&
-    resolvedId;
-  var splitPath =
-    splitPathAndFilename_(resolvedPath);
-
-  return {
-    ResolveStatus: status,
-    ResolvedID: resolvedId,
-    ResolvedType: resolvedType,
-    ResolvedPath: resolvedPath,
-    MatchCount: row[4] || 0,
-    MatchMethod: row[5] || '',
-    Confidence: row[6] || '',
-    ResolveNote: row[7] || '',
-    SharedPathID: canShare
-      ? String(resolvedType).toLowerCase() === 'folder'
-        ? resolvedId
-        : row[8] || ''
-      : '',
-    SharedFileID: canShare &&
-      String(resolvedType).toLowerCase() === 'file'
-        ? resolvedId
-        : '',
-    SharedPath: canShare
-      ? String(resolvedType).toLowerCase() === 'folder'
-        ? resolvedPath
-        : splitPath.path
-      : '',
-    SharedFilename: canShare &&
-      String(resolvedType).toLowerCase() === 'file'
-        ? splitPath.filename
-        : '',
-    SharedSource: canShare
-      ? 'RESOLVE'
-      : ''
-  };
-}
-
-function splitPathAndFilename_(
-  value
-) {
-  var text = value
-    ? value.toString().trim()
-    : '';
-
-  if (!text) {
-    return {
-      path: '',
-      filename: ''
-    };
-  }
-
-  text = text
-    .replace(/[\/]+/g, '\\')
-    .replace(/[\\]+$/g, '');
-
-  var parts = text.split('\\');
-  var filename = parts.pop() || '';
-
-  return {
-    path: parts.join('\\'),
-    filename: filename
-  };
-}
-
-function getMappedValue_(
-
-  rowObject,
-  field
-) {
-  if (!rowObject) {
-    return '';
-  }
-
-  return rowObject[field] ===
-    undefined
-    ? ''
-    : rowObject[field];
-}
-
-
-function normalizeActionConfig_(config) {
-  if (!config) throw new Error('Action config is required.');
-
-  var operationMode = String(
-    config.operationMode || 'SINGLE'
-  ).trim().toUpperCase();
-
-  var sourceObjectMode = String(
-    config.sourceObjectMode || 'FILE'
-  ).trim().toUpperCase();
-
+function normalizeBaseRunConfig_(config, phase) {
+  var source = config || {};
+  var startRow = Number(source.startRow || 2);
+  var endRow = Number(source.endRow || source.startRow || 2);
+  var rowRanges = parseRowRanges_(source.rowRanges, startRow, endRow);
   var normalized = {
-    spreadsheetId: String(config.spreadsheetId || ''),
-    sheetName: String(config.sheetName || ''),
-    startRow: parseInt(config.startRow, 10),
-    endRow: parseInt(config.endRow, 10),
-
-    sourceObjectIdColumn: normalizeOptionalColumn_(config.sourceObjectIdColumn),
-    sourcePathIdColumn: normalizeOptionalColumn_(config.sourcePathIdColumn),
-    sourceFileIdColumn: normalizeOptionalColumn_(config.sourceFileIdColumn),
-    sourceObjectMode: sourceObjectMode,
-
-    operationMode: operationMode,
-    operationValue: normalizeActionOperation_(config.operationValue),
-    operationColumn: normalizeOptionalColumn_(config.operationColumn),
-
-    targetColumn: normalizeRequiredColumn_(config.targetColumn),
-    rootIdColumn: normalizeRequiredColumn_(config.rootIdColumn),
-    batchSize: parseInt(config.batchSize || ACTION_DEFAULT_BATCH_SIZE, 10),
-    triggerGapMinutes: parseInt(config.triggerGapMinutes || ACTION_DEFAULT_TRIGGER_GAP_MINUTES, 10),
-    outputMapping: normalizeOutputMapping_(
-      mergeOutputMappings_(
-        config.actionOutputMapping || config.outputMapping || {},
-        config.workflowOutputMapping || {}
-      ),
-      config.pipelineMode === true
-        ? ACTION_RUNTIME_OUTPUT_FIELDS
-        : ACTION_OUTPUT_FIELDS
-    ),
-
-    pipelineMode: config.pipelineMode === true,
-    verifyExistsColumn: normalizeOptionalColumn_(config.verifyExistsColumn),
-    verifyFileIdColumn: normalizeOptionalColumn_(config.verifyFileIdColumn),
-    verifyPathIdColumn: normalizeOptionalColumn_(config.verifyPathIdColumn),
-    resolvedIdColumn: normalizeOptionalColumn_(config.resolvedIdColumn),
-    resolveStatusColumn: normalizeOptionalColumn_(config.resolveStatusColumn),
-    resolveMatchCountColumn: normalizeOptionalColumn_(config.resolveMatchCountColumn)
+    phase: phase,
+    sheetName: asText_(source.sheetName),
+    startRow: rowRanges[0].startRow,
+    endRow: rowRanges[rowRanges.length - 1].endRow,
+    rowRanges: rowRanges,
+    batchSize: Number(source.batchSize || VERRACT_DEFAULT_BATCH_SIZE),
+    rootIdColumn: letterToColumn_(source.rootIdColumn),
+    pathColumns: parseColumnSpec_(source.pathColumns),
+    filenameColumn: letterToColumn_(source.filenameColumn),
+    extensionColumn: asText_(source.extensionColumn) ? letterToColumn_(source.extensionColumn) : null,
+    skipExistingTrue: !!source.skipExistingTrue,
+    verifyMapping: buildColumnMapping_(source.verifyMapping, VERIFY_REPORT_FIELDS),
+    resolveMapping: buildColumnMapping_(source.resolveMapping, RESOLVE_REPORT_FIELDS),
+    sharedMapping: buildColumnMapping_(source.sharedMapping, SHARED_OUTPUT_FIELDS)
   };
 
-  if (!normalized.spreadsheetId || !normalized.sheetName) {
-    throw new Error('Action spreadsheet/sheet context is required.');
+  if (normalized.startRow < 2) {
+    throw new Error('Start row must be 2 or greater.');
   }
 
-  if (
-    isNaN(normalized.startRow) ||
-    isNaN(normalized.endRow) ||
-    normalized.startRow < 1 ||
-    normalized.endRow < normalized.startRow
-  ) {
-    throw new Error('Action row range is invalid.');
+  if (normalized.endRow < normalized.startRow) {
+    throw new Error('End row must be greater than or equal to start row.');
   }
 
-  if (['FILE', 'FOLDER'].indexOf(normalized.sourceObjectMode) === -1) {
-    throw new Error('Source Object Mode must be FILE or FOLDER.');
+  if (!normalized.pathColumns.length) {
+    throw new Error('Candidate Path Columns is required.');
   }
 
-  if (
-    normalized.sourceObjectMode === 'FILE' &&
-    (
-      !normalized.sourceFileIdColumn ||
-      !normalized.sourcePathIdColumn
-    )
-  ) {
-    throw new Error(
-      'Object Result FileID and PathID mappings are required for FILE mode.'
-    );
+  if (normalized.batchSize < 1) normalized.batchSize = VERRACT_DEFAULT_BATCH_SIZE;
+  if (normalized.batchSize > VERRACT_MAX_BATCH_SIZE) normalized.batchSize = VERRACT_MAX_BATCH_SIZE;
+
+  ensureMappingFields_(normalized.sharedMapping, SHARED_OUTPUT_FIELDS, 'Shared Output');
+
+  if (phase === VERRACT_PHASE_VERIFY) {
+    ensureMappingFields_(normalized.verifyMapping, ['Exists'], 'Verify Report');
   }
 
-  if (normalized.sourceObjectMode === 'FOLDER' && !normalized.sourcePathIdColumn) {
-    throw new Error('Object Result PathID mapping is required for FOLDER mode.');
-  }
-
-  if (['SINGLE', 'COLUMN'].indexOf(normalized.operationMode) === -1) {
-    throw new Error('Operation Source must be SINGLE or COLUMN.');
-  }
-
-  if (normalized.operationMode === 'SINGLE' && !normalized.operationValue) {
-    throw new Error('Select a valid single operation.');
-  }
-
-  if (normalized.operationMode === 'COLUMN' && !normalized.operationColumn) {
-    throw new Error('Operation Column is required in COLUMN mode.');
-  }
-
-  normalized.batchSize = Math.max(
-    ACTION_MIN_BATCH_SIZE,
-    Math.min(ACTION_MAX_BATCH_SIZE, normalized.batchSize)
-  );
-
-  normalized.triggerGapMinutes = Math.max(
-    ACTION_MIN_TRIGGER_GAP_MINUTES,
-    Math.min(ACTION_MAX_TRIGGER_GAP_MINUTES, normalized.triggerGapMinutes)
-  );
-
-  validateOutputMapping_(
-    normalized.outputMapping,
-    normalized.pipelineMode
-      ? ACTION_RUNTIME_OUTPUT_FIELDS
-      : ACTION_OUTPUT_FIELDS,
-    'Action'
-  );
-
-  requireOutputMappingFields_(
-    normalized.outputMapping,
-    ACTION_REQUIRED_OUTPUT_FIELDS,
-    'Action Output'
-  );
-
-  if (normalized.pipelineMode) {
-    requireOutputMappingFields_(
-      normalized.outputMapping,
-      PIPELINE_REQUIRED_OUTPUT_FIELDS,
-      'Workflow Result'
-    );
+  if (phase === VERRACT_PHASE_RESOLVE) {
+    ensureMappingFields_(normalized.verifyMapping, ['Exists'], 'Verify Report');
+    ensureMappingFields_(normalized.resolveMapping, ['ResolveStatus'], 'Resolve Report');
   }
 
   return normalized;
 }
 
-function normalizeActionOperation_(value) {
-  var normalized = String(value || '').trim().toUpperCase().replace(/[\s&-]+/g, '_').replace(/_+/g, '_');
-  var aliases = {
-    MOVE_OBJECT: 'MOVE',
-    COPY_OBJECT: 'COPY',
-    RENAME_OBJECT: 'RENAME',
-    MOVE_RENAME_OBJECT: 'MOVE_RENAME',
-    MOVE_AND_RENAME: 'MOVE_RENAME',
-    DELETE_OBJECT: 'DELETE'
+
+function parseRowRanges_(spec, fallbackStartRow, fallbackEndRow) {
+  var text = asText_(spec);
+  var ranges = [];
+
+  if (!text) {
+    ranges.push({
+      startRow: Number(fallbackStartRow || 2),
+      endRow: Number(fallbackEndRow || fallbackStartRow || 2)
+    });
+  } else {
+    text.split(',').forEach(function(part) {
+      var token = asText_(part);
+      if (!token) return;
+
+      var match = token.match(/^(\d+)(?:\s*:\s*(\d+))?$/);
+      if (!match) {
+        throw new Error('Invalid row range: ' + token);
+      }
+
+      var startRow = Number(match[1]);
+      var endRow = Number(match[2] || match[1]);
+      if (startRow < 2 || endRow < startRow) {
+        throw new Error('Invalid row range: ' + token);
+      }
+
+      ranges.push({ startRow: startRow, endRow: endRow });
+    });
+  }
+
+  if (!ranges.length) {
+    throw new Error('At least one row range is required.');
+  }
+
+  ranges.sort(function(a, b) {
+    return a.startRow - b.startRow || a.endRow - b.endRow;
+  });
+
+  var merged = [];
+  ranges.forEach(function(range) {
+    var last = merged.length ? merged[merged.length - 1] : null;
+    if (!last || range.startRow > last.endRow + 1) {
+      merged.push({ startRow: range.startRow, endRow: range.endRow });
+      return;
+    }
+    if (range.endRow > last.endRow) last.endRow = range.endRow;
+  });
+
+  return merged;
+}
+
+function getConfigRowRanges_(config) {
+  if (config && config.rowRanges && config.rowRanges.length) {
+    return config.rowRanges;
+  }
+  return [{
+    startRow: Number(config.startRow),
+    endRow: Number(config.endRow)
+  }];
+}
+
+function getRunSheet_(config) {
+  var ss = SpreadsheetApp.getActive();
+  return config.sheetName ? ss.getSheetByName(config.sheetName) : ss.getActiveSheet();
+}
+
+function isRowHiddenForRun_(sheet, row) {
+  return !!(
+    sheet.isRowHiddenByFilter(row) ||
+    sheet.isRowHiddenByUser(row)
+  );
+}
+
+function buildInputFromRow_(rowValues, config) {
+  var rootId = asText_(getCellFromRow_(rowValues, config.rootIdColumn));
+  var filename = mergeFilename_(
+    getCellFromRow_(rowValues, config.filenameColumn),
+    config.extensionColumn ? getCellFromRow_(rowValues, config.extensionColumn) : ''
+  );
+
+  var candidates = config.pathColumns.map(function(column) {
+    return {
+      column: column,
+      columnLetter: columnToLetter_(column),
+      path: asText_(getCellFromRow_(rowValues, column))
+    };
+  }).filter(function(candidate) {
+    return !!candidate.path;
+  });
+
+  return {
+    rootId: rootId,
+    filename: filename,
+    candidates: candidates
   };
-  normalized = aliases[normalized] || normalized;
-  return ACTION_SUPPORTED_OPERATIONS.indexOf(normalized) === -1 ? '' : normalized;
+}
+
+function buildSharedObject_(pathId, fileId, path, filename, source) {
+  return {
+    SharedPathID: pathId || '',
+    SharedFileID: fileId || '',
+    SharedPath: path || '',
+    SharedFilename: filename || '',
+    SharedSource: source || ''
+  };
+}
+
+function isVerifyTrue_(value) {
+  return String(value).trim().toUpperCase() === 'TRUE';
+}
+
+function isSharedComplete_(shared) {
+  return !!(asText_(shared.SharedPathID) && asText_(shared.SharedFileID));
+}
+
+function normalizeActionRunConfig_(config) {
+  var source = config || {};
+  var startRow = Number(source.startRow || 2);
+  var endRow = Number(source.endRow || source.startRow || 2);
+  var rowRanges = parseRowRanges_(source.rowRanges, startRow, endRow);
+  var normalized = {
+    phase: VERRACT_PHASE_ACTION,
+    sheetName: asText_(source.sheetName),
+    startRow: rowRanges[0].startRow,
+    endRow: rowRanges[rowRanges.length - 1].endRow,
+    rowRanges: rowRanges,
+    batchSize: Number(source.batchSize || VERRACT_DEFAULT_BATCH_SIZE),
+    rootIdColumn: letterToColumn_(source.rootIdColumn),
+    targetPathColumn: letterToColumn_(source.targetPathColumn),
+    operation: asText_(source.operation).toUpperCase(),
+    sharedMapping: buildColumnMapping_(source.sharedMapping, SHARED_OUTPUT_FIELDS),
+    actionMapping: buildColumnMapping_(source.actionMapping, ACTION_OUTPUT_FIELDS)
+  };
+
+  if (normalized.startRow < 2) {
+    throw new Error('Start row must be 2 or greater.');
+  }
+
+  if (normalized.endRow < normalized.startRow) {
+    throw new Error('End row must be greater than or equal to start row.');
+  }
+
+  if (normalized.batchSize < 1) normalized.batchSize = VERRACT_DEFAULT_BATCH_SIZE;
+  if (normalized.batchSize > VERRACT_MAX_BATCH_SIZE) normalized.batchSize = VERRACT_MAX_BATCH_SIZE;
+
+  if (normalized.operation !== ACTION_OPERATIONS.MOVE) {
+    throw new Error('Action Operation must be MOVE.');
+  }
+
+  ensureMappingFields_(normalized.sharedMapping, ['SharedPathID'], 'Shared Output');
+  ensureMappingFields_(normalized.actionMapping, ['ActionStatus', 'ActionID', 'ActionAt'], 'Action Output');
+
+  return normalized;
+}
+
+function disabledExecutionResponse_() {
+  return {
+    ok: false,
+    status: 'EXECUTION_DISABLED',
+    message: VERRACT_DISABLED_EXECUTION_MESSAGE
+  };
 }
