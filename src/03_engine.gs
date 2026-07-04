@@ -87,7 +87,7 @@ function runVerifyRows_(config) {
   setVerractState_(VERRACT_STATE_KEYS.LAST_STATUS, 'WAITING_CONTINUATION');
   scheduleVerractContinuation_(
     'TRIGGER_BATCH_AUDIT_MULTI',
-    VERRACT_CONTINUATION_DELAY_MS
+    config.continuationGapMinutes * 60 * 1000
   );
 }
 

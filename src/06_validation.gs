@@ -10,6 +10,7 @@ function normalizeBaseRunConfig_(config, phase) {
     endRow: rowRanges[rowRanges.length - 1].endRow,
     rowRanges: rowRanges,
     batchSize: Number(source.batchSize || VERRACT_DEFAULT_BATCH_SIZE),
+    continuationGapMinutes: normalizeContinuationGapMinutes_(source.continuationGapMinutes),
     rootIdColumn: letterToColumn_(source.rootIdColumn),
     pathColumns: parseColumnSpec_(source.pathColumns),
     filenameColumn: letterToColumn_(source.filenameColumn),
@@ -49,6 +50,20 @@ function normalizeBaseRunConfig_(config, phase) {
   return normalized;
 }
 
+
+function normalizeContinuationGapMinutes_(value) {
+  var gap = Number(value);
+
+  if (!isFinite(gap) || gap < VERRACT_MIN_CONTINUATION_GAP_MINUTES) {
+    gap = VERRACT_DEFAULT_CONTINUATION_GAP_MINUTES;
+  }
+
+  if (gap > VERRACT_MAX_CONTINUATION_GAP_MINUTES) {
+    gap = VERRACT_MAX_CONTINUATION_GAP_MINUTES;
+  }
+
+  return gap;
+}
 
 function parseRowRanges_(spec, fallbackStartRow, fallbackEndRow) {
   var text = asText_(spec);

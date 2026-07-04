@@ -96,6 +96,8 @@
     <input id="rowRanges" placeholder="optional, e.g. 10:15,20:25">
     <label>Batch size</label>
     <input id="batchSize" type="number" value="20">
+    <label>Gap between batches (minutes)</label>
+    <input id="continuationGapMinutes" type="number" min="1" max="1440" step="1" value="1">
     <button class="secondary" onclick="loadSelection()">Use active selection</button>
   </div>
 
@@ -206,6 +208,7 @@
         endRow: Number(val('endRow')),
         rowRanges: val('rowRanges'),
         batchSize: Number(val('batchSize')),
+        continuationGapMinutes: Number(val('continuationGapMinutes')),
         rootIdColumn: val('rootIdColumn'),
         pathColumns: val('pathColumns'),
         filenameColumn: val('filenameColumn'),
@@ -262,7 +265,7 @@
 
       [
         'sheetName', 'startRow', 'endRow', 'rowRanges', 'batchSize',
-        'rootIdColumn', 'pathColumns', 'filenameColumn', 'extensionColumn',
+        'continuationGapMinutes', 'rootIdColumn', 'pathColumns', 'filenameColumn', 'extensionColumn',
         'targetPathColumn', 'operation'
       ].forEach(function(id) {
         if (settings[id] !== undefined && settings[id] !== null) {

@@ -7,7 +7,10 @@ function GET_VERRACT_UI_SETTINGS() {
     sharedOutputFields: SHARED_OUTPUT_FIELDS,
     actionOutputFields: ACTION_OUTPUT_FIELDS,
     defaultBatchSize: VERRACT_DEFAULT_BATCH_SIZE,
-    maxBatchSize: VERRACT_MAX_BATCH_SIZE
+    maxBatchSize: VERRACT_MAX_BATCH_SIZE,
+    defaultContinuationGapMinutes: VERRACT_DEFAULT_CONTINUATION_GAP_MINUTES,
+    minContinuationGapMinutes: VERRACT_MIN_CONTINUATION_GAP_MINUTES,
+    maxContinuationGapMinutes: VERRACT_MAX_CONTINUATION_GAP_MINUTES
   };
 }
 
