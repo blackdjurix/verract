@@ -3,48 +3,188 @@
 <head>
   <base target="_top">
   <style>
+    :root {
+      --border: #dadce0;
+      --text: #202124;
+      --muted: #5f6368;
+      --surface: #ffffff;
+      --surface-soft: #f8fafd;
+      --tab: #f1f3f4;
+      --tab-hover: #e8eaed;
+      --tab-active: #dbe8fb;
+      --primary: #1a73e8;
+      --primary-text: #ffffff;
+      --secondary: #e8f0fe;
+      --secondary-text: #174ea6;
+      --danger: #fce8e6;
+      --danger-text: #a50e0e;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
     body {
       font-family: Arial, sans-serif;
       font-size: 13px;
-      padding: 12px;
-      color: #202124;
+      color: var(--text);
+      background: var(--surface);
+      overflow: hidden;
     }
+
+    .app-shell {
+      display: flex;
+      height: 100vh;
+      min-height: 0;
+    }
+
+    .tab-strip {
+      display: flex;
+      flex: 0 0 36px;
+      width: 36px;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--tab);
+    }
+
+    .tab-button {
+      position: relative;
+      flex: 1 1 0;
+      min-height: 64px;
+      width: 36px;
+      padding: 0;
+      margin: 0;
+      border: 0;
+      border-bottom: 1px solid var(--border);
+      border-radius: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .tab-button:last-child {
+      border-bottom: 0;
+    }
+
+    .tab-button:hover {
+      background: var(--tab-hover);
+    }
+
+    .tab-button.active {
+      background: var(--tab-active);
+      color: #174ea6;
+    }
+
+    .tab-button.active::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--primary);
+    }
+
+    .tab-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-90deg);
+      transform-origin: center;
+      white-space: nowrap;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+
+    .content-shell {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .tab-panel {
+      display: none;
+      height: 100%;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
     h1 {
       font-size: 18px;
-      margin: 0 0 8px;
+      margin: 0 0 4px;
     }
+
     h2 {
       font-size: 14px;
-      margin: 18px 0 8px;
+      margin: 0 0 8px;
     }
+
+    .panel-heading {
+      margin-bottom: 12px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .panel-subtitle,
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
     label {
       display: block;
       margin: 8px 0 3px;
       font-weight: 600;
     }
-    input, select {
+
+    input,
+    select {
       width: 100%;
       box-sizing: border-box;
       padding: 6px;
-      border: 1px solid #dadce0;
+      border: 1px solid var(--border);
       border-radius: 4px;
+      background: var(--surface);
+      color: var(--text);
       font-size: 13px;
     }
+
     .row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
+
     .check {
       display: flex;
       align-items: center;
       gap: 6px;
       margin-top: 10px;
     }
+
     .check input {
       width: auto;
     }
-    button {
+
+    button.action-button {
       width: 100%;
       padding: 8px;
       border: 0;
@@ -53,134 +193,223 @@
       margin-top: 10px;
       font-weight: 600;
     }
-    .primary { background: #1a73e8; color: white; }
-    .secondary { background: #e8f0fe; color: #174ea6; }
-    .danger { background: #fce8e6; color: #a50e0e; }
+
+    .primary {
+      background: var(--primary);
+      color: var(--primary-text);
+    }
+
+    .secondary {
+      background: var(--secondary);
+      color: var(--secondary-text);
+    }
+
+    .danger {
+      background: var(--danger);
+      color: var(--danger-text);
+    }
+
     .box {
-      border: 1px solid #dadce0;
+      border: 1px solid var(--border);
       border-radius: 6px;
       padding: 10px;
       margin-top: 10px;
-      background: #fff;
+      background: var(--surface);
     }
-    .muted { color: #5f6368; font-size: 12px; }
+
+    .box:first-of-type {
+      margin-top: 0;
+    }
+
     #status {
-      margin-top: 12px;
       padding: 8px;
-      background: #f8fafd;
-      border: 1px solid #dadce0;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
       border-radius: 4px;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
   </style>
 </head>
 <body>
-  <h1>verract</h1>
-  <div class="muted">Verify → Resolve → Action</div>
+  <div class="app-shell">
+    <nav class="tab-strip" aria-label="verract sections">
+      <button class="tab-button active" type="button" data-tab="home" aria-label="Home" title="Home">
+        <span class="tab-label">Home</span>
+      </button>
+      <button class="tab-button" type="button" data-tab="shared" aria-label="Shared Output" title="Shared Output">
+        <span class="tab-label">Shared</span>
+      </button>
+      <button class="tab-button" type="button" data-tab="verify" aria-label="Verify" title="Verify">
+        <span class="tab-label">Verify</span>
+      </button>
+      <button class="tab-button" type="button" data-tab="resolve" aria-label="Resolve" title="Resolve">
+        <span class="tab-label">Resolve</span>
+      </button>
+      <button class="tab-button" type="button" data-tab="action" aria-label="Action" title="Action">
+        <span class="tab-label">Action</span>
+      </button>
+    </nav>
 
-  <div class="box">
-    <h2>Range</h2>
-    <label>Sheet name</label>
-    <input id="sheetName" placeholder="blank = active sheet">
-    <div class="row">
-      <div>
-        <label>Start row</label>
-        <input id="startRow" type="number" value="2">
-      </div>
-      <div>
-        <label>End row</label>
-        <input id="endRow" type="number" value="2">
-      </div>
-    </div>
-    <label>Row ranges</label>
-    <input id="rowRanges" placeholder="optional, e.g. 10:15,20:25">
-    <label>Batch size</label>
-    <input id="batchSize" type="number" value="20">
-    <button class="secondary" onclick="loadSelection()">Use active selection</button>
+    <main class="content-shell">
+      <section id="panel-home" class="tab-panel active" data-panel="home">
+        <div class="panel-heading">
+          <h1>verract</h1>
+          <div class="muted">Verify → Resolve → Action</div>
+        </div>
+
+        <div class="box">
+          <h2>Prep Setting</h2>
+          <label>Sheet name</label>
+          <input id="sheetName" placeholder="blank = active sheet">
+
+          <div class="row">
+            <div>
+              <label>Start row</label>
+              <input id="startRow" type="number" value="2">
+            </div>
+            <div>
+              <label>End row</label>
+              <input id="endRow" type="number" value="2">
+            </div>
+          </div>
+
+          <label>Row ranges</label>
+          <input id="rowRanges" placeholder="optional, e.g. 10:15,20:25">
+
+          <label>Gap between batches (minutes)</label>
+          <input id="continuationGapMinutes" type="number" min="1" max="1440" step="1" value="1">
+
+          <label>Batch size</label>
+          <input id="batchSize" type="number" value="20">
+
+          <button class="action-button secondary" type="button" onclick="loadSelection()">Use active selection</button>
+        </div>
+
+        <div class="box">
+          <h2>Execution</h2>
+          <div class="check">
+            <input id="phaseVerify" type="checkbox" checked disabled>
+            <span>Verify</span>
+          </div>
+          <div class="check">
+            <input id="phaseResolve" type="checkbox">
+            <span>Resolve</span>
+          </div>
+          <div class="check">
+            <input id="phaseAction" type="checkbox">
+            <span>Action</span>
+          </div>
+          <button class="action-button primary" type="button" onclick="runExecution()">Execute</button>
+          <button class="action-button danger" type="button" onclick="stopRun()">Stop &amp; Reset</button>
+        </div>
+
+        <div class="box">
+          <h2>Status</h2>
+          <div id="status">Ready.</div>
+        </div>
+      </section>
+
+      <section id="panel-shared" class="tab-panel" data-panel="shared">
+        <div class="panel-heading">
+          <div class="panel-title">Shared Output Configuration</div>
+        </div>
+
+        <div class="box">
+          <label>SharedPathID *</label>
+          <input class="column-input" id="shared_SharedPathID">
+          <label>SharedFileID *</label>
+          <input class="column-input" id="shared_SharedFileID">
+          <label>SharedPath *</label>
+          <input class="column-input" id="shared_SharedPath">
+          <label>SharedFilename *</label>
+          <input class="column-input" id="shared_SharedFilename">
+          <label>SharedSource *</label>
+          <input class="column-input" id="shared_SharedSource">
+        </div>
+      </section>
+
+      <section id="panel-verify" class="tab-panel" data-panel="verify">
+        <div class="panel-heading">
+          <div class="panel-title">Verify Configuration</div>
+        </div>
+
+        <div class="box">
+          <h2>Input</h2>
+          <label>RootID column</label>
+          <input class="column-input" id="rootIdColumn" placeholder="Example: A">
+          <label>Candidate Path Columns</label>
+          <input class="column-input" id="pathColumns" placeholder="Example: AT:AW or C,E:G">
+          <label>Filename column</label>
+          <input class="column-input" id="filenameColumn" placeholder="Example: B">
+          <label>Extension column</label>
+          <input class="column-input" id="extensionColumn" placeholder="optional">
+          <div class="check">
+            <input id="skipExistingTrue" type="checkbox">
+            <span>Skip rows with Exists=TRUE</span>
+          </div>
+        </div>
+
+        <div class="box">
+          <h2>Verify Report</h2>
+          <label>Exists *</label>
+          <input class="column-input" id="verify_Exists" placeholder="Example: AX">
+          <label>CheckedPathCount</label>
+          <input class="column-input" id="verify_CheckedPathCount">
+          <label>MatchedPathColumn</label>
+          <input class="column-input" id="verify_MatchedPathColumn">
+          <label>Error</label>
+          <input class="column-input" id="verify_Error">
+        </div>
+      </section>
+
+      <section id="panel-resolve" class="tab-panel" data-panel="resolve">
+        <div class="panel-heading">
+          <div class="panel-title">Resolve Configuration</div>
+        </div>
+
+        <div class="box">
+          <h2>Resolve Report</h2>
+          <label>ResolveStatus *</label>
+          <input class="column-input" id="resolve_ResolveStatus" placeholder="Example: BA">
+          <label>ResolveID</label>
+          <input class="column-input" id="resolve_ResolveID">
+          <label>ResolveCandidateCount</label>
+          <input class="column-input" id="resolve_ResolveCandidateCount">
+          <label>ResolveNote</label>
+          <input class="column-input" id="resolve_ResolveNote">
+        </div>
+      </section>
+
+      <section id="panel-action" class="tab-panel" data-panel="action">
+        <div class="panel-heading">
+          <div class="panel-title">Action Configuration</div>
+        </div>
+
+        <div class="box">
+          <h2>Action Input</h2>
+          <label>Target Path column *</label>
+          <input class="column-input" id="targetPathColumn" placeholder="Example: AW">
+          <label>Operation *</label>
+          <select id="operation">
+            <option value="MOVE">MOVE</option>
+          </select>
+        </div>
+
+        <div class="box">
+          <h2>Action Output</h2>
+          <label>ActionStatus *</label>
+          <input class="column-input" id="action_ActionStatus">
+          <label>ActionID *</label>
+          <input class="column-input" id="action_ActionID">
+          <label>ActionAt *</label>
+          <input class="column-input" id="action_ActionAt">
+          <label>ActionNote</label>
+          <input class="column-input" id="action_ActionNote">
+        </div>
+      </section>
+    </main>
   </div>
-
-  <div class="box">
-    <h2>Input</h2>
-    <label>RootID column</label>
-    <input class="column-input" id="rootIdColumn" placeholder="Example: A">
-    <label>Candidate Path Columns</label>
-    <input class="column-input" id="pathColumns" placeholder="Example: AT:AW or C,E:G">
-    <label>Filename column</label>
-    <input class="column-input" id="filenameColumn" placeholder="Example: B">
-    <label>Extension column</label>
-    <input class="column-input" id="extensionColumn" placeholder="optional">
-    <div class="check">
-      <input id="skipExistingTrue" type="checkbox">
-      <span>Skip rows with Exists=TRUE</span>
-    </div>
-  </div>
-
-  <div class="box">
-    <h2>Action Input</h2>
-    <label>Target Path column *</label>
-    <input class="column-input" id="targetPathColumn" placeholder="Example: AW">
-    <label>Operation *</label>
-    <select id="operation">
-      <option value="MOVE">MOVE</option>
-    </select>
-  </div>
-
-  <div class="box">
-    <h2>Verify Report</h2>
-    <label>Exists *</label>
-    <input class="column-input" id="verify_Exists" placeholder="Example: AX">
-    <label>CheckedPathCount</label>
-    <input class="column-input" id="verify_CheckedPathCount">
-    <label>MatchedPathColumn</label>
-    <input class="column-input" id="verify_MatchedPathColumn">
-    <label>Error</label>
-    <input class="column-input" id="verify_Error">
-  </div>
-
-  <div class="box">
-    <h2>Resolve Report</h2>
-    <label>ResolveStatus *</label>
-    <input class="column-input" id="resolve_ResolveStatus" placeholder="Example: BA">
-    <label>ResolveID</label>
-    <input class="column-input" id="resolve_ResolveID">
-    <label>ResolveCandidateCount</label>
-    <input class="column-input" id="resolve_ResolveCandidateCount">
-    <label>ResolveNote</label>
-    <input class="column-input" id="resolve_ResolveNote">
-  </div>
-
-  <div class="box">
-    <h2>Shared Output</h2>
-    <label>SharedPathID *</label>
-    <input class="column-input" id="shared_SharedPathID">
-    <label>SharedFileID *</label>
-    <input class="column-input" id="shared_SharedFileID">
-    <label>SharedPath *</label>
-    <input class="column-input" id="shared_SharedPath">
-    <label>SharedFilename *</label>
-    <input class="column-input" id="shared_SharedFilename">
-    <label>SharedSource *</label>
-    <input class="column-input" id="shared_SharedSource">
-  </div>
-
-  <div class="box">
-    <h2>Action Output</h2>
-    <label>ActionStatus *</label>
-    <input class="column-input" id="action_ActionStatus">
-    <label>ActionID *</label>
-    <input class="column-input" id="action_ActionID">
-    <label>ActionAt *</label>
-    <input class="column-input" id="action_ActionAt">
-    <label>ActionNote</label>
-    <input class="column-input" id="action_ActionNote">
-  </div>
-
-  <button class="primary" onclick="runVerify()">Run Verify</button>
-  <button class="primary" onclick="runResolve()">Run Resolve</button>
-  <button class="primary" onclick="runAction()">Run Action</button>
-  <button class="danger" onclick="stopRun()">Stop & Reset</button>
-
-  <div id="status">Ready.</div>
 
   <script>
     function val(id) {
@@ -199,6 +428,18 @@
       document.getElementById('status').textContent = message;
     }
 
+    function activateTab(tabName) {
+      document.querySelectorAll('.tab-button').forEach(function(button) {
+        var isActive = button.getAttribute('data-tab') === tabName;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+
+      document.querySelectorAll('.tab-panel').forEach(function(panel) {
+        panel.classList.toggle('active', panel.getAttribute('data-panel') === tabName);
+      });
+    }
+
     function buildConfig() {
       return {
         sheetName: val('sheetName'),
@@ -206,6 +447,7 @@
         endRow: Number(val('endRow')),
         rowRanges: val('rowRanges'),
         batchSize: Number(val('batchSize')),
+        continuationGapMinutes: Number(val('continuationGapMinutes')),
         rootIdColumn: val('rootIdColumn'),
         pathColumns: val('pathColumns'),
         filenameColumn: val('filenameColumn'),
@@ -213,6 +455,8 @@
         targetPathColumn: val('targetPathColumn'),
         operation: val('operation'),
         skipExistingTrue: document.getElementById('skipExistingTrue').checked,
+        enableResolve: document.getElementById('phaseResolve').checked,
+        enableAction: document.getElementById('phaseAction').checked,
         verifyMapping: {
           Exists: val('verify_Exists'),
           CheckedPathCount: val('verify_CheckedPathCount'),
@@ -262,7 +506,7 @@
 
       [
         'sheetName', 'startRow', 'endRow', 'rowRanges', 'batchSize',
-        'rootIdColumn', 'pathColumns', 'filenameColumn', 'extensionColumn',
+        'continuationGapMinutes', 'rootIdColumn', 'pathColumns', 'filenameColumn', 'extensionColumn',
         'targetPathColumn', 'operation'
       ].forEach(function(id) {
         if (settings[id] !== undefined && settings[id] !== null) {
@@ -273,6 +517,13 @@
       if (settings.skipExistingTrue !== undefined) {
         document.getElementById('skipExistingTrue').checked =
           !!settings.skipExistingTrue;
+      }
+
+      if (settings.enableResolve !== undefined) {
+        document.getElementById('phaseResolve').checked = !!settings.enableResolve;
+      }
+      if (settings.enableAction !== undefined) {
+        document.getElementById('phaseAction').checked = !!settings.enableAction;
       }
 
       var verify = settings.verifyMapping || {};
@@ -310,13 +561,18 @@
     function formatRunResult(result) {
       if (!result) return 'No response.';
       if (result.ok) {
-        return result.phase + ' completed: rows ' + result.startRow + '–' + result.endRow + '.';
+        return result.phase + ' started: rows ' + result.startRow + '–' + result.endRow + '.';
       }
       return result.message || result.status || 'Run failed.';
     }
 
-    function runVerify() {
-      status('Running Verify...');
+    function runExecution() {
+      var config = buildConfig();
+      var phases = ['VERIFY'];
+      if (config.enableResolve) phases.push('RESOLVE');
+      if (config.enableAction) phases.push('ACTION');
+
+      status('Running ' + phases.join(' → ') + '...');
       google.script.run
         .withSuccessHandler(function(result) {
           status(formatRunResult(result));
@@ -324,45 +580,26 @@
         .withFailureHandler(function(err) {
           status('ERROR: ' + err.message);
         })
-        .START_VERIFY_FROM_SIDEBAR(buildConfig());
-    }
-
-    function runResolve() {
-      status('Running Resolve...');
-      google.script.run
-        .withSuccessHandler(function(result) {
-          status(formatRunResult(result));
-        })
-        .withFailureHandler(function(err) {
-          status('ERROR: ' + err.message);
-        })
-        .START_RESOLVE_FROM_SIDEBAR(buildConfig());
-    }
-
-
-    function runAction() {
-      status('Running Action...');
-      google.script.run
-        .withSuccessHandler(function(result) {
-          status(formatRunResult(result));
-        })
-        .withFailureHandler(function(err) {
-          status('ERROR: ' + err.message);
-        })
-        .START_ACTION_FROM_UI(buildConfig());
+        .START_CHAIN_FROM_SIDEBAR(config);
     }
 
     function stopRun() {
       status('Stopping...');
       google.script.run
         .withSuccessHandler(function(result) {
-          status(JSON.stringify(result, null, 2));
+          status(result && result.ok ? 'Stopped and reset.' : 'Stop failed.');
         })
         .withFailureHandler(function(err) {
           status('ERROR: ' + err.message);
         })
         .STOP_VERRACT_FROM_SIDEBAR();
     }
+
+    document.querySelectorAll('.tab-button').forEach(function(button) {
+      button.addEventListener('click', function() {
+        activateTab(this.getAttribute('data-tab'));
+      });
+    });
 
     document.querySelectorAll('.column-input').forEach(function(input) {
       input.addEventListener('input', function() {

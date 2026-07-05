@@ -25,7 +25,7 @@ function getVerractConfigState_() {
 }
 
 function initializeVerractRunState_(config) {
-  clearVerractTriggerHandler_('TRIGGER_BATCH_AUDIT_MULTI');
+  clearVerractTriggers_();
 
   setVerractConfigState_(config);
   setVerractState_(VERRACT_STATE_KEYS.ACTIVE_PHASE, config.phase);
@@ -45,11 +45,13 @@ function isVerractRunActive_(phase, runId) {
 function completeVerractRun_(phase, runId) {
   if (!isVerractRunActive_(phase, runId)) return;
 
-  clearVerractTriggerHandler_('TRIGGER_BATCH_AUDIT_MULTI');
+  clearVerractTriggers_();
   deleteVerractState_(VERRACT_STATE_KEYS.ACTIVE_PHASE);
   deleteVerractState_(VERRACT_STATE_KEYS.CURRENT_ROW);
   deleteVerractState_(VERRACT_STATE_KEYS.RANGE_INDEX);
   deleteVerractState_(VERRACT_STATE_KEYS.CONFIG);
+  deleteVerractState_(VERRACT_STATE_KEYS.CURRENT_STEP);
+  deleteVerractState_(VERRACT_STATE_KEYS.NEXT_RUN_AT);
   setVerractState_(VERRACT_STATE_KEYS.LAST_STATUS, 'COMPLETED');
 }
 
@@ -81,7 +83,9 @@ function clearVerractTriggers_() {
   var handlers = {
     TRIGGER_BATCH_AUDIT_MULTI: true,
     TRIGGER_RESOLVE_BATCH_MULTI: true,
-    TRIGGER_ACTION_BATCH_MULTI: true
+    TRIGGER_ACTION_BATCH_MULTI: true,
+    TRIGGER_CHAIN_BATCH_MULTI: true,
+    TRIGGER_MULTI_PHASE_TRANSITION: true
   };
 
   ScriptApp.getProjectTriggers().forEach(function(trigger) {

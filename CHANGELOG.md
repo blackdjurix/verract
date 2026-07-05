@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.9.0 - 2026-07-05 - Row Chain Orchestration
+
+### Added
+
+- Configurable manual gap between continuation batches.
+- Per-row chain execution across Verify, Resolve, and Action.
+- Chain modes:
+  - Verify
+  - Verify → Resolve
+  - Verify → Action
+  - Verify → Resolve → Action
+- Vertical-tab sidebar navigation.
+- Operational Home dashboard for range, gap, batch size, execution, and status.
+
+### Changed
+
+- Continuation delay now uses the user-configured gap.
+- Chain processing preserves fixed per-row phase order.
+- Sidebar configuration is separated into Home, Shared, Verify, Resolve, and Action panels.
+- Chain start and Stop & Reset UI messages are clearer.
+
 ## v0.8.0 - 2026-07-04 - Contract Reset
 
 ### Changed

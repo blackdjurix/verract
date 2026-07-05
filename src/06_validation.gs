@@ -10,6 +10,7 @@ function normalizeBaseRunConfig_(config, phase) {
     endRow: rowRanges[rowRanges.length - 1].endRow,
     rowRanges: rowRanges,
     batchSize: Number(source.batchSize || VERRACT_DEFAULT_BATCH_SIZE),
+    continuationGapMinutes: normalizeContinuationGapMinutes_(source.continuationGapMinutes),
     rootIdColumn: letterToColumn_(source.rootIdColumn),
     pathColumns: parseColumnSpec_(source.pathColumns),
     filenameColumn: letterToColumn_(source.filenameColumn),
@@ -49,6 +50,20 @@ function normalizeBaseRunConfig_(config, phase) {
   return normalized;
 }
 
+
+function normalizeContinuationGapMinutes_(value) {
+  var gap = Number(value);
+
+  if (!isFinite(gap) || gap < VERRACT_MIN_CONTINUATION_GAP_MINUTES) {
+    gap = VERRACT_DEFAULT_CONTINUATION_GAP_MINUTES;
+  }
+
+  if (gap > VERRACT_MAX_CONTINUATION_GAP_MINUTES) {
+    gap = VERRACT_MAX_CONTINUATION_GAP_MINUTES;
+  }
+
+  return gap;
+}
 
 function parseRowRanges_(spec, fallbackStartRow, fallbackEndRow) {
   var text = asText_(spec);
@@ -200,6 +215,44 @@ function normalizeActionRunConfig_(config) {
 
   ensureMappingFields_(normalized.sharedMapping, ['SharedPathID'], 'Shared Output');
   ensureMappingFields_(normalized.actionMapping, ['ActionStatus', 'ActionID', 'ActionAt'], 'Action Output');
+
+  return normalized;
+}
+
+
+function normalizeChainRunConfig_(config) {
+  var source = config || {};
+  var normalized = normalizeBaseRunConfig_(source, VERRACT_PHASE_VERIFY);
+
+  normalized.phase = VERRACT_PHASE_CHAIN;
+  normalized.enableVerify = true;
+  normalized.enableResolve = !!source.enableResolve;
+  normalized.enableAction = !!source.enableAction;
+
+  if (normalized.enableResolve) {
+    ensureMappingFields_(normalized.resolveMapping, ['ResolveStatus'], 'Resolve Report');
+  }
+
+  if (normalized.enableAction) {
+    normalized.targetPathColumn = letterToColumn_(source.targetPathColumn);
+    normalized.operation = asText_(source.operation).toUpperCase();
+    normalized.actionMapping = buildColumnMapping_(source.actionMapping, ACTION_OUTPUT_FIELDS);
+
+    if (normalized.operation !== ACTION_OPERATIONS.MOVE) {
+      throw new Error('Action Operation must be MOVE.');
+    }
+
+    ensureMappingFields_(normalized.sharedMapping, ['SharedPathID'], 'Shared Output');
+    ensureMappingFields_(
+      normalized.actionMapping,
+      ['ActionStatus', 'ActionID', 'ActionAt'],
+      'Action Output'
+    );
+  } else {
+    normalized.targetPathColumn = null;
+    normalized.operation = ACTION_OPERATIONS.MOVE;
+    normalized.actionMapping = buildColumnMapping_(source.actionMapping, ACTION_OUTPUT_FIELDS);
+  }
 
   return normalized;
 }

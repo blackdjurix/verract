@@ -87,7 +87,7 @@ function runVerifyRows_(config) {
   setVerractState_(VERRACT_STATE_KEYS.LAST_STATUS, 'WAITING_CONTINUATION');
   scheduleVerractContinuation_(
     'TRIGGER_BATCH_AUDIT_MULTI',
-    VERRACT_CONTINUATION_DELAY_MS
+    config.continuationGapMinutes * 60 * 1000
   );
 }
 
@@ -133,11 +133,9 @@ function mapVerifyErrorFromResult_(result) {
 }
 
 function CREATE_MULTI_PHASE_PIPELINE() {
-  SpreadsheetApp.getUi().alert(
-    'Multi-Phase is disabled in the contract reset. Run Verify, then Resolve.'
-  );
+  OPEN_VERRACT_SIDEBAR();
 }
 
 function TRIGGER_MULTI_PHASE_TRANSITION() {
-  return;
+  return TRIGGER_CHAIN_BATCH_MULTI();
 }
