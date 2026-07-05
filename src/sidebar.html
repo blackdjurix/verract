@@ -177,10 +177,23 @@
     <input class="column-input" id="action_ActionNote">
   </div>
 
-  <button class="primary" onclick="runVerify()">Run Verify</button>
-  <button class="primary" onclick="runResolve()">Run Resolve</button>
-  <button class="primary" onclick="runAction()">Run Action</button>
-  <button class="danger" onclick="stopRun()">Stop & Reset</button>
+  <div class="box">
+    <h2>Execution</h2>
+    <div class="check">
+      <input id="phaseVerify" type="checkbox" checked disabled>
+      <span>Verify</span>
+    </div>
+    <div class="check">
+      <input id="phaseResolve" type="checkbox">
+      <span>Resolve</span>
+    </div>
+    <div class="check">
+      <input id="phaseAction" type="checkbox">
+      <span>Action</span>
+    </div>
+    <button class="primary" onclick="runExecution()">Execute</button>
+    <button class="danger" onclick="stopRun()">Stop & Reset</button>
+  </div>
 
   <div id="status">Ready.</div>
 
@@ -216,6 +229,8 @@
         targetPathColumn: val('targetPathColumn'),
         operation: val('operation'),
         skipExistingTrue: document.getElementById('skipExistingTrue').checked,
+        enableResolve: document.getElementById('phaseResolve').checked,
+        enableAction: document.getElementById('phaseAction').checked,
         verifyMapping: {
           Exists: val('verify_Exists'),
           CheckedPathCount: val('verify_CheckedPathCount'),
@@ -278,6 +293,13 @@
           !!settings.skipExistingTrue;
       }
 
+      if (settings.enableResolve !== undefined) {
+        document.getElementById('phaseResolve').checked = !!settings.enableResolve;
+      }
+      if (settings.enableAction !== undefined) {
+        document.getElementById('phaseAction').checked = !!settings.enableAction;
+      }
+
       var verify = settings.verifyMapping || {};
       var resolve = settings.resolveMapping || {};
       var shared = settings.sharedMapping || {};
@@ -318,8 +340,13 @@
       return result.message || result.status || 'Run failed.';
     }
 
-    function runVerify() {
-      status('Running Verify...');
+    function runExecution() {
+      var config = buildConfig();
+      var phases = ['VERIFY'];
+      if (config.enableResolve) phases.push('RESOLVE');
+      if (config.enableAction) phases.push('ACTION');
+
+      status('Running ' + phases.join(' → ') + '...');
       google.script.run
         .withSuccessHandler(function(result) {
           status(formatRunResult(result));
@@ -327,32 +354,7 @@
         .withFailureHandler(function(err) {
           status('ERROR: ' + err.message);
         })
-        .START_VERIFY_FROM_SIDEBAR(buildConfig());
-    }
-
-    function runResolve() {
-      status('Running Resolve...');
-      google.script.run
-        .withSuccessHandler(function(result) {
-          status(formatRunResult(result));
-        })
-        .withFailureHandler(function(err) {
-          status('ERROR: ' + err.message);
-        })
-        .START_RESOLVE_FROM_SIDEBAR(buildConfig());
-    }
-
-
-    function runAction() {
-      status('Running Action...');
-      google.script.run
-        .withSuccessHandler(function(result) {
-          status(formatRunResult(result));
-        })
-        .withFailureHandler(function(err) {
-          status('ERROR: ' + err.message);
-        })
-        .START_ACTION_FROM_UI(buildConfig());
+        .START_CHAIN_FROM_SIDEBAR(config);
     }
 
     function stopRun() {

@@ -227,6 +227,7 @@ function startResolveFromUiImpl_(config) {
 function GET_VERRACT_ENGINE_STATUS() {
   return {
     activePhase: getVerractState_(VERRACT_STATE_KEYS.ACTIVE_PHASE) || '',
+    currentStep: getVerractState_(VERRACT_STATE_KEYS.CURRENT_STEP) || '',
     currentRow: getVerractState_(VERRACT_STATE_KEYS.CURRENT_ROW) || '',
     endRow: getVerractState_(VERRACT_STATE_KEYS.END_ROW) || '',
     lastStatus: getVerractState_(VERRACT_STATE_KEYS.LAST_STATUS) || ''
@@ -244,9 +245,5 @@ function RUN_DIAGNOSTICS_FROM_SIDEBAR() {
 }
 
 function START_MULTI_PHASE_FROM_SIDEBAR(config) {
-  return {
-    ok: false,
-    status: 'MULTI_PHASE_DISABLED',
-    message: 'Multi-Phase is disabled. Run Verify, Resolve, and Action explicitly.'
-  };
+  return START_CHAIN_FROM_SIDEBAR(config || {});
 }
