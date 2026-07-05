@@ -1,8 +1,8 @@
 var VERRACT_NAME = 'verract';
-var VERRACT_VERSION = '0.8.0';
-var VERRACT_BUILD = 'Verify Resolve Action Foundation';
+var VERRACT_VERSION = '0.9.0';
+var VERRACT_BUILD = 'Row Chain Orchestration';
 var VERRACT_AUTHOR = 'blackdjurix';
-var VERRACT_FEATURE = 'Folder path MOVE action contract';
+var VERRACT_FEATURE = 'Per-row Verify, Resolve, and Action chain orchestration';
 
 function SHOW_VERSION_INFO() {
   SpreadsheetApp.getUi().alert(
