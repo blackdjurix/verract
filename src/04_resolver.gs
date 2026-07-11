@@ -244,6 +244,7 @@ function resolveExactPair_(input) {
 
   var checked = 0;
   var firstPathEvidence = null;
+  var pathEvidences = [];
   var firstPathMissing = null;
 
   for (var i = 0; i < input.candidates.length; i++) {
@@ -278,13 +279,16 @@ function resolveExactPair_(input) {
       continue;
     }
 
+    var pathEvidence = {
+      columnLetter: candidate.columnLetter,
+      folder: folderResult.folder,
+      pathId: folderResult.pathId,
+      path: folderResult.matchedPath || candidate.path
+    };
+    pathEvidences.push(pathEvidence);
+
     if (!firstPathEvidence) {
-      firstPathEvidence = {
-        columnLetter: candidate.columnLetter,
-        folder: folderResult.folder,
-        pathId: folderResult.pathId,
-        path: folderResult.matchedPath || candidate.path
-      };
+      firstPathEvidence = pathEvidence;
     }
 
     var fileResult = findExactFileInFolder_(folderResult.folder, input.filename);
@@ -316,6 +320,28 @@ function resolveExactPair_(input) {
         path: folderResult.matchedPath || candidate.path,
         filename: input.filename,
         note: ''
+      };
+    }
+  }
+
+  if (pathEvidences.length) {
+    var localMatch = findUniqueStrongFileAcrossFolders_(
+      pathEvidences,
+      input.filename
+    );
+
+    if (localMatch.status === 'FOUND') {
+      return {
+        exists: true,
+        status: 'RESOLVED',
+        checkedPathCount: checked,
+        matchedPathColumn: localMatch.evidence.columnLetter,
+        candidateCount: 1,
+        pathId: localMatch.evidence.pathId,
+        fileId: localMatch.file.getId(),
+        path: localMatch.evidence.path,
+        filename: localMatch.file.getName(),
+        note: 'Strong local filename match found in matched candidate path.'
       };
     }
   }
@@ -421,6 +447,150 @@ function findExactFilesUnderRoot_(rootId, filename, maxMatches) {
   }
 
   return { status: 'NOT_FOUND', matches: [], count: 0 };
+}
+
+function findUniqueStrongFileAcrossFolders_(pathEvidences, filename) {
+  var foundById = {};
+  var foundMatches = [];
+  var sawAmbiguous = false;
+
+  for (var i = 0; i < pathEvidences.length; i++) {
+    var evidence = pathEvidences[i];
+    var match = findUniqueStrongFileInFolder_(evidence.folder, filename);
+
+    if (match.status === 'AMBIGUOUS') {
+      sawAmbiguous = true;
+      continue;
+    }
+
+    if (match.status !== 'FOUND' || !match.file) continue;
+
+    var fileId = match.file.getId();
+    if (foundById[fileId]) continue;
+    foundById[fileId] = true;
+    foundMatches.push({
+      file: match.file,
+      evidence: evidence
+    });
+  }
+
+  if (sawAmbiguous || foundMatches.length > 1) {
+    return {
+      status: 'AMBIGUOUS',
+      file: null,
+      evidence: null,
+      count: foundMatches.length
+    };
+  }
+
+  if (foundMatches.length === 1) {
+    return {
+      status: 'FOUND',
+      file: foundMatches[0].file,
+      evidence: foundMatches[0].evidence,
+      count: 1
+    };
+  }
+
+  return {
+    status: 'NOT_FOUND',
+    file: null,
+    evidence: null,
+    count: 0
+  };
+}
+
+function findUniqueStrongFileInFolder_(folder, filename) {
+  var extension = getLowerExtension_(filename);
+  var targetBase = getFilenameBase_(filename);
+  var strongMatches = [];
+  var files;
+
+  try {
+    files = folder.getFiles();
+  } catch (err) {
+    return { status: 'NOT_FOUND', file: null, count: 0 };
+  }
+
+  while (files.hasNext()) {
+    var file = files.next();
+    var candidateName = file.getName();
+    if (extension && getLowerExtension_(candidateName) !== extension) continue;
+
+    var candidateBase = getFilenameBase_(candidateName);
+    var similarity = similarityScore_(targetBase, candidateBase);
+    var tokenOverlap = tokenOverlapScore_(targetBase, candidateBase);
+    var localScore = (tokenOverlap * 0.75) + (similarity * 0.25);
+
+    if (
+      tokenOverlap >= 0.65 ||
+      similarity >= RESOLVE_SUGGESTION_MIN_SIMILARITY
+    ) {
+      strongMatches.push({
+        file: file,
+        score: localScore,
+        similarity: similarity,
+        tokenOverlap: tokenOverlap
+      });
+    }
+  }
+
+  if (!strongMatches.length) {
+    return { status: 'NOT_FOUND', file: null, count: 0 };
+  }
+
+  strongMatches.sort(function(a, b) {
+    return b.score - a.score;
+  });
+
+  if (strongMatches.length === 1) {
+    return { status: 'FOUND', file: strongMatches[0].file, count: 1 };
+  }
+
+  if (strongMatches[0].score - strongMatches[1].score >= 0.10) {
+    return {
+      status: 'FOUND',
+      file: strongMatches[0].file,
+      count: strongMatches.length
+    };
+  }
+
+  return {
+    status: 'AMBIGUOUS',
+    file: null,
+    count: strongMatches.length
+  };
+}
+
+function tokenOverlapScore_(a, b) {
+  var leftTokens = uniqueComparableTokens_(a);
+  var rightTokens = uniqueComparableTokens_(b);
+
+  if (!leftTokens.length || !rightTokens.length) return 0;
+
+  var rightLookup = {};
+  for (var i = 0; i < rightTokens.length; i++) {
+    rightLookup[rightTokens[i]] = true;
+  }
+
+  var overlap = 0;
+  for (var j = 0; j < leftTokens.length; j++) {
+    if (rightLookup[leftTokens[j]]) overlap++;
+  }
+
+  return overlap / Math.min(leftTokens.length, rightTokens.length);
+}
+
+function uniqueComparableTokens_(text) {
+  var normalized = normalizeComparableText_(text);
+  if (!normalized) return [];
+
+  var seen = {};
+  return normalized.split(' ').filter(function(token) {
+    if (!token || seen[token]) return false;
+    seen[token] = true;
+    return true;
+  });
 }
 
 function findSimilarFilesInFolder_(folder, filename, folderPath) {

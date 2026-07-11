@@ -141,6 +141,32 @@ function nowIso_() {
   return new Date().toISOString();
 }
 
+function nowTraceTimestamp_() {
+  var now = new Date();
+  var timestamp = Utilities.formatDate(
+    now,
+    Session.getScriptTimeZone(),
+    "yyMMdd'T'HHmmss"
+  );
+  return timestamp + ('000' + now.getMilliseconds()).slice(-3);
+}
+
+function createTraceRunPrefix_() {
+  var now = new Date();
+  var timestamp = Utilities.formatDate(
+    now,
+    Session.getScriptTimeZone(),
+    "yyyyMMdd'T'HHmmss"
+  );
+  return timestamp + ('000' + now.getMilliseconds()).slice(-3);
+}
+
+function formatTraceBatchRunId_(prefix, sequence) {
+  var number = Number(sequence || 1);
+  var suffix = ('000' + number).slice(-3);
+  return prefix + '-' + suffix;
+}
+
 function createRunId_(prefix) {
   return prefix + '_' + Utilities.getUuid();
 }

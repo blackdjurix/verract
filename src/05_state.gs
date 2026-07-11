@@ -35,6 +35,10 @@ function initializeVerractRunState_(config) {
   setVerractState_(VERRACT_STATE_KEYS.RUN_ID, config.runId);
   setVerractState_(VERRACT_STATE_KEYS.STARTED_AT, new Date().toISOString());
   setVerractState_(VERRACT_STATE_KEYS.LAST_STATUS, 'RUNNING');
+  if (config.traceRunPrefix) {
+    setVerractState_(VERRACT_STATE_KEYS.TRACE_RUN_PREFIX, config.traceRunPrefix);
+    setVerractState_(VERRACT_STATE_KEYS.TRACE_BATCH_SEQUENCE, 0);
+  }
 }
 
 function isVerractRunActive_(phase, runId) {
