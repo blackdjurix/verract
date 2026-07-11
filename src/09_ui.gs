@@ -6,6 +6,7 @@ function GET_VERRACT_UI_SETTINGS() {
     resolveReportFields: RESOLVE_REPORT_FIELDS,
     sharedOutputFields: SHARED_OUTPUT_FIELDS,
     actionOutputFields: ACTION_OUTPUT_FIELDS,
+    traceOutputFields: TRACE_OUTPUT_FIELDS,
     defaultBatchSize: VERRACT_DEFAULT_BATCH_SIZE,
     maxBatchSize: VERRACT_MAX_BATCH_SIZE,
     defaultContinuationGapMinutes: VERRACT_DEFAULT_CONTINUATION_GAP_MINUTES,
@@ -152,6 +153,16 @@ function getDefaultUiMapping_() {
       ActionID: '',
       ActionAt: '',
       ActionNote: ''
+    },
+    traceMapping: {
+      BatchRunID: '',
+      RunPhases: '',
+      VerifyStart: '',
+      VerifyEnd: '',
+      ResolveStart: '',
+      ResolveEnd: '',
+      ActionStart: '',
+      ActionEnd: ''
     }
   };
 }
@@ -164,7 +175,8 @@ function saveOutputMappingFromConfig_(config) {
       verifyMapping: source.verifyMapping || {},
       resolveMapping: source.resolveMapping || {},
       sharedMapping: source.sharedMapping || {},
-      actionMapping: source.actionMapping || {}
+      actionMapping: source.actionMapping || {},
+      traceMapping: source.traceMapping || {}
     })
   );
 

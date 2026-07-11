@@ -327,6 +327,14 @@
           <label>SharedSource *</label>
           <input class="column-input" id="shared_SharedSource">
         </div>
+
+        <div class="box">
+          <h2>Runtime Trace</h2>
+          <label>BatchRunID</label>
+          <input class="column-input" id="trace_BatchRunID">
+          <label>RunPhases</label>
+          <input class="column-input" id="trace_RunPhases">
+        </div>
       </section>
 
       <section id="panel-verify" class="tab-panel" data-panel="verify">
@@ -361,6 +369,14 @@
           <label>Error</label>
           <input class="column-input" id="verify_Error">
         </div>
+
+        <div class="box">
+          <h2>Verify Trace</h2>
+          <label>VerifyStart</label>
+          <input class="column-input" id="trace_VerifyStart">
+          <label>VerifyEnd</label>
+          <input class="column-input" id="trace_VerifyEnd">
+        </div>
       </section>
 
       <section id="panel-resolve" class="tab-panel" data-panel="resolve">
@@ -378,6 +394,14 @@
           <input class="column-input" id="resolve_ResolveCandidateCount">
           <label>ResolveNote</label>
           <input class="column-input" id="resolve_ResolveNote">
+        </div>
+
+        <div class="box">
+          <h2>Resolve Trace</h2>
+          <label>ResolveStart</label>
+          <input class="column-input" id="trace_ResolveStart">
+          <label>ResolveEnd</label>
+          <input class="column-input" id="trace_ResolveEnd">
         </div>
       </section>
 
@@ -406,6 +430,14 @@
           <input class="column-input" id="action_ActionAt">
           <label>ActionNote</label>
           <input class="column-input" id="action_ActionNote">
+        </div>
+
+        <div class="box">
+          <h2>Action Trace</h2>
+          <label>ActionStart</label>
+          <input class="column-input" id="trace_ActionStart">
+          <label>ActionEnd</label>
+          <input class="column-input" id="trace_ActionEnd">
         </div>
       </section>
     </main>
@@ -481,6 +513,16 @@
           ActionID: val('action_ActionID'),
           ActionAt: val('action_ActionAt'),
           ActionNote: val('action_ActionNote')
+        },
+        traceMapping: {
+          BatchRunID: val('trace_BatchRunID'),
+          RunPhases: val('trace_RunPhases'),
+          VerifyStart: val('trace_VerifyStart'),
+          VerifyEnd: val('trace_VerifyEnd'),
+          ResolveStart: val('trace_ResolveStart'),
+          ResolveEnd: val('trace_ResolveEnd'),
+          ActionStart: val('trace_ActionStart'),
+          ActionEnd: val('trace_ActionEnd')
         }
       };
     }
@@ -530,10 +572,12 @@
       var resolve = settings.resolveMapping || {};
       var shared = settings.sharedMapping || {};
       var action = settings.actionMapping || {};
+      var trace = settings.traceMapping || {};
       Object.keys(verify).forEach(function(key) { setVal('verify_' + key, verify[key]); });
       Object.keys(resolve).forEach(function(key) { setVal('resolve_' + key, resolve[key]); });
       Object.keys(shared).forEach(function(key) { setVal('shared_' + key, shared[key]); });
       Object.keys(action).forEach(function(key) { setVal('action_' + key, action[key]); });
+      Object.keys(trace).forEach(function(key) { setVal('trace_' + key, trace[key]); });
     }
 
     function loadSavedSettings() {
@@ -550,10 +594,12 @@
           var resolve = settings.resolveMapping || {};
           var shared = settings.sharedMapping || {};
           var action = settings.actionMapping || {};
+          var trace = settings.traceMapping || {};
           Object.keys(verify).forEach(function(key) { setVal('verify_' + key, verify[key]); });
           Object.keys(resolve).forEach(function(key) { setVal('resolve_' + key, resolve[key]); });
           Object.keys(shared).forEach(function(key) { setVal('shared_' + key, shared[key]); });
           Object.keys(action).forEach(function(key) { setVal('action_' + key, action[key]); });
+          Object.keys(trace).forEach(function(key) { setVal('trace_' + key, trace[key]); });
         })
         .GET_VERRACT_OUTPUT_MAPPING_SETTINGS();
     }

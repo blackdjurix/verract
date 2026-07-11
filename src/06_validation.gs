@@ -18,7 +18,8 @@ function normalizeBaseRunConfig_(config, phase) {
     skipExistingTrue: !!source.skipExistingTrue,
     verifyMapping: buildColumnMapping_(source.verifyMapping, VERIFY_REPORT_FIELDS),
     resolveMapping: buildColumnMapping_(source.resolveMapping, RESOLVE_REPORT_FIELDS),
-    sharedMapping: buildColumnMapping_(source.sharedMapping, SHARED_OUTPUT_FIELDS)
+    sharedMapping: buildColumnMapping_(source.sharedMapping, SHARED_OUTPUT_FIELDS),
+    traceMapping: buildColumnMapping_(source.traceMapping, TRACE_OUTPUT_FIELDS)
   };
 
   if (normalized.startRow < 2) {
@@ -195,7 +196,8 @@ function normalizeActionRunConfig_(config) {
     targetPathColumn: letterToColumn_(source.targetPathColumn),
     operation: asText_(source.operation).toUpperCase(),
     sharedMapping: buildColumnMapping_(source.sharedMapping, SHARED_OUTPUT_FIELDS),
-    actionMapping: buildColumnMapping_(source.actionMapping, ACTION_OUTPUT_FIELDS)
+    actionMapping: buildColumnMapping_(source.actionMapping, ACTION_OUTPUT_FIELDS),
+    traceMapping: buildColumnMapping_(source.traceMapping, TRACE_OUTPUT_FIELDS)
   };
 
   if (normalized.startRow < 2) {
@@ -228,6 +230,8 @@ function normalizeChainRunConfig_(config) {
   normalized.enableVerify = true;
   normalized.enableResolve = !!source.enableResolve;
   normalized.enableAction = !!source.enableAction;
+  normalized.traceRunPrefix = createTraceRunPrefix_();
+  normalized.runPhases = buildConfiguredRunPhases_(normalized).join('|');
 
   if (normalized.enableResolve) {
     ensureMappingFields_(normalized.resolveMapping, ['ResolveStatus'], 'Resolve Report');
@@ -255,6 +259,13 @@ function normalizeChainRunConfig_(config) {
   }
 
   return normalized;
+}
+
+function buildConfiguredRunPhases_(config) {
+  var phases = [VERRACT_PHASE_VERIFY];
+  if (config.enableResolve) phases.push(VERRACT_PHASE_RESOLVE);
+  if (config.enableAction) phases.push(VERRACT_PHASE_ACTION);
+  return phases;
 }
 
 function disabledExecutionResponse_() {
